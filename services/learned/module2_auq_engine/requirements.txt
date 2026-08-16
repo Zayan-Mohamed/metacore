@@ -1,0 +1,4 @@
+torch>=2.0        # CPU wheel is fine: pip install torch --index-url https://download.pytorch.org/whl/cpu
+numpy>=1.24
+pyyaml>=6.0
+# scikit-learn is optional; metrics here are implemented in NumPy so it is not required.

@@ -1,0 +1,16 @@
+# Module 2 - AUQ Engine - starter config
+seed: 0
+k_classes: 3
+class_names: [safe, stressed, critical]
+features: [voltage_pu, load_factor, freq_dev_hz, wind_ms, rainfall_mm, solar_wm2, gen_margin, temp_c]
+train:
+  epochs: 300
+  batch_size: 128
+  lr: 0.002
+  weight_decay: 0.00001
+  kl_anneal_epochs: 50      # slow anneal of the Dirichlet KL term
+  ood_reg_weight: 0.1       # OOD-aware evidence regularisation
+  ood_proxy_sigma: 4.0      # spread of the far-OOD proxy (standardised space)
+trigger:
+  false_alarm_rate: 0.05    # threshold = (1 - far) quantile of in-distribution u
+  hysteresis: 2             # consecutive steps to confirm / clear a competence drop
