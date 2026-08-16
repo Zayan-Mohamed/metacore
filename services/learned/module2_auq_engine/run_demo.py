@@ -9,6 +9,9 @@ from evaluate import auroc, aupr, fpr95, ece
 from contract import build_output
 
 cfg = yaml.safe_load(open("config.yaml"))
+import random
+random.seed(cfg["seed"]); np.random.seed(cfg["seed"]); torch.manual_seed(cfg["seed"])
+torch.use_deterministic_algorithms(True)
 K = cfg["k_classes"]; tr = cfg["train"]
 rng = np.random.default_rng(cfg["seed"]); torch.manual_seed(cfg["seed"])
 
