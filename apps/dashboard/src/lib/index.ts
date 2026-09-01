@@ -265,3 +265,93 @@ export function pairModule3Decisions(
   }
   return rows;
 }
+
+// Module 4: Deterministic Physics Verification & Grounded Causal Translation
+
+export interface ViolationDTO {
+  type:
+    | "VIOLATION_TYPE_UNSPECIFIED"
+    | "VIOLATION_TYPE_UNDERVOLTAGE"
+    | "VIOLATION_TYPE_OVERVOLTAGE"
+    | "VIOLATION_TYPE_THERMAL_OVERLOAD"
+    | "VIOLATION_TYPE_NON_CONVERGENCE"
+    | "VIOLATION_TYPE_MALFORMED_ACTION";
+  element_id: string;
+  limit: number;
+  measured: number;
+  margin_fraction: number;
+  attributed_component: string;
+}
+
+export interface CausalLogDTO {
+  action_id: string;
+  text: string;
+  grounded_entities: string[];
+  generator: string;
+}
+
+export interface GridBusState {
+  bus_name: string;
+  island: string;
+  voltage_pu: number;
+  status: "SAFE" | "UNDERVOLTAGE" | "OVERVOLTAGE";
+}
+
+export interface GridLineState {
+  line_name: string;
+  current_amps: number;
+  norm_amps: number;
+  margin_fraction: number;
+  is_closed: boolean;
+  status: "NORMAL" | "OVERLOAD" | "TRIPPED";
+}
+
+export interface Module4VerifyResult {
+  action_id: string;
+  decision: "DECISION_APPROVE" | "DECISION_REJECT";
+  solve_latency_ms: number;
+  violations: ViolationDTO[];
+  rejection_severity: number;
+  causal_log: CausalLogDTO;
+  buses: GridBusState[];
+  lines: GridLineState[];
+}
+
+export interface Module4Preset {
+  title: string;
+  description: string;
+  payload: {
+    action_id: string;
+    origin: "SYSTEM1" | "SYSTEM2";
+    rationale: string;
+    breakers: Array<{ edge_id: string; closed: boolean }>;
+    load_shed: Array<{ node_id: string; shed_fraction: number; priority_tier: number }>;
+    dispatch: Array<{ node_id: string; p_kw: number; q_kvar: number }>;
+  };
+}
+
+export class Module4RunError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message);
+    this.name = "Module4RunError";
+  }
+}
+
+export async function fetchModule4Presets(): Promise<Record<string, Module4Preset>> {
+  const res = await fetch("/api/module4/presets");
+  if (!res.ok) {
+    throw new Module4RunError(`Failed to fetch presets (HTTP ${res.status})`, res.status);
+  }
+  return (await res.json()) as Record<string, Module4Preset>;
+}
+
+export async function runModule4Verify(
+  payload: Module4Preset["payload"],
+): Promise<Module4VerifyResult> {
+  return postJson<Module4VerifyResult>(
+    "/api/module4/verify",
+    payload,
+    (detail, status) => new Module4RunError(detail, status),
+  );
+}
+

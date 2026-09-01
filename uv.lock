@@ -1880,6 +1880,8 @@ source = { editable = "services/gateway" }
 dependencies = [
     { name = "fastapi" },
     { name = "grpcio" },
+    { name = "metacore-module4-translation" },
+    { name = "metacore-module4-verification" },
     { name = "pydantic" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -1888,6 +1890,8 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "grpcio", specifier = ">=1.66" },
+    { name = "metacore-module4-translation", editable = "deterministic-core/module4_semantic_translation" },
+    { name = "metacore-module4-verification", editable = "deterministic-core/module4_verification" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.31" },
 ]

@@ -1,0 +1,367 @@
+/* Module 4 Verification Route Styles */
+
+.verification {
+  min-height: 100vh;
+  background-color: var(--bg);
+  color: var(--text);
+  padding: 2rem 1.5rem 4rem;
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+.verification * {
+  box-sizing: border-box;
+}
+
+.verification .mono {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.verification__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.verification__header {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 1.25rem;
+}
+
+.verification__title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.verification__mark {
+  background: var(--blue-soft);
+  color: var(--blue);
+  padding: 0.75rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.verification__header h1 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.verification__badge {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-muted);
+}
+
+.verification__badge--core {
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+  border-color: var(--border);
+}
+
+.verification__subtitle {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.verification__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.verification__card-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.verification__card-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.verification__row-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+.verification__btns {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.verification__btn {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.825rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.verification__btn:hover {
+  background: var(--surface-3, rgba(255, 255, 255, 0.08));
+  border-color: var(--text-muted);
+}
+
+.verification__btn--ghost {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.verification__btn--ghost:hover {
+  color: var(--text);
+}
+
+.verification__action-preview {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  font-size: 0.825rem;
+}
+
+.verification__action-meta {
+  display: flex;
+  gap: 1rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.verification__action-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.verification__action-item strong {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-bottom: 0.2rem;
+  text-transform: uppercase;
+}
+
+/* KPI Row */
+.verification__kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.verification__kpi {
+  padding: 1rem;
+}
+
+.verification__kpi-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 0.35rem;
+}
+
+.verification__kpi-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
+
+.verification__kpi-value--approve {
+  color: var(--green);
+}
+
+.verification__kpi-value--reject {
+  color: var(--red);
+}
+
+.verification__kpi-note {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+/* Bus Voltage Grid */
+.verification__bus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0.85rem;
+}
+
+.verification__bus-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 0.85rem;
+}
+
+.verification__bus-card--undervolt {
+  border-color: var(--red);
+  background: var(--red-soft);
+}
+
+.verification__bus-card--overvolt {
+  border-color: var(--red);
+  background: var(--red-soft);
+}
+
+.verification__bus-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 0.25rem;
+}
+
+.verification__bus-island {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+.verification__bus-bar-track {
+  height: 6px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.verification__bus-bar-fill {
+  height: 100%;
+  background: var(--green);
+  transition: width 0.3s ease;
+}
+
+.verification__bus-bar-fill--viol {
+  background: var(--red);
+}
+
+.verification__bus-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+/* Branch Flow Table */
+.verification__lines-table,
+.verification__violations-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.825rem;
+}
+
+.verification__lines-table th,
+.verification__lines-table td,
+.verification__violations-table th,
+.verification__violations-table td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.verification__lines-table th,
+.verification__violations-table th {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.verification__status-pill {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.verification__status-pill--normal {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.verification__status-pill--overload {
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.verification__status-pill--tripped {
+  background: var(--border);
+  color: var(--text-muted);
+}
+
+/* Operator Causal Log Card */
+.verification__causal-card {
+  border-left: 4px solid var(--blue);
+  background: var(--surface-2);
+}
+
+.verification__causal-card--reject {
+  border-left-color: var(--red);
+}
+
+.verification__causal-text {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  margin-bottom: 0.75rem;
+}
+
+.verification__chip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.verification__chip-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.verification__chip {
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid var(--blue);
+}
+
+.verification__chip--reject {
+  background: var(--red-soft);
+  color: var(--red);
+  border-color: var(--red);
+}

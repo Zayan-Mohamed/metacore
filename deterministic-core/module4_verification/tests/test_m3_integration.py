@@ -1,11 +1,22 @@
 """Integration Tests for Module 4 with M3 Sample Action Stream."""
 
-from verification.firewall.verifier import PhysicsVerifier
-from verification.types import ProposedControlAction
+import json
+from pathlib import Path
 
-SAMPLE_M3_ACTIONS = [
+from verification.firewall.verifier import PhysicsVerifier
+from verification.types import Decision, ProposedControlAction
+
+M3_SAMPLE_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "services"
+    / "learned"
+    / "module3_metapolicy"
+    / "sample_m3_to_m4.jsonl"
+)
+
+FALLBACK_M3_ACTIONS = [
     {
-        "action_id": "e362fe37-72f6-46d9-b61a-76d3ab2f9f06",
+        "action_id": "eb9ad02e-d30a-44a6-8f50-175c6cec2f29",
         "origin": "SYSTEM1",
         "breakers": [],
         "load_shed": [{"node_id": "N8", "shed_fraction": 0.1117, "priority_tier": 3}],
@@ -13,15 +24,7 @@ SAMPLE_M3_ACTIONS = [
         "rationale": "S1 reactive shed vuln=0.14",
     },
     {
-        "action_id": "bcca98d3-11e5-43e4-b631-b4c2f262dc0c",
-        "origin": "SYSTEM1",
-        "breakers": [],
-        "load_shed": [{"node_id": "N9", "shed_fraction": 0.0947, "priority_tier": 3}],
-        "dispatch": [],
-        "rationale": "S1 sensing-fallback shed vuln=0.21",
-    },
-    {
-        "action_id": "66a45b32-ca0c-4682-8251-f515e58cc27e",
+        "action_id": "58fd3b5e-08eb-4e99-add5-344afa1565c1",
         "origin": "SYSTEM2",
         "breakers": [{"edge_id": "E_crit_1", "closed": True}],
         "load_shed": [
@@ -31,27 +34,33 @@ SAMPLE_M3_ACTIONS = [
         "dispatch": [{"node_id": "N4", "p_kw": 147.37, "q_kvar": 10.0}],
         "rationale": "S2 survival opt vuln=0.63 protect-tier1",
     },
-    {
-        "action_id": "a80f5b54-1dbb-4d0d-834c-4fdb114d164b",
-        "origin": "SYSTEM2",
-        "breakers": [{"edge_id": "E_crit_1", "closed": True}],
-        "load_shed": [
-            {"node_id": "N8", "shed_fraction": 0.25, "priority_tier": 3},
-            {"node_id": "N12", "shed_fraction": 0.2325, "priority_tier": 3},
-        ],
-        "dispatch": [{"node_id": "N4", "p_kw": 184.21, "q_kvar": 10.0}],
-        "rationale": "S2 survival opt vuln=0.88 protect-tier1",
-    },
 ]
 
 
 def test_m3_sample_actions_execution() -> None:
+    """Verifies all actions from M3 stream against OpenDSS physics."""
     verifier = PhysicsVerifier()
+    actions: list[ProposedControlAction] = []
 
-    for raw_action in SAMPLE_M3_ACTIONS:
-        action = ProposedControlAction.model_validate(raw_action)
+    if M3_SAMPLE_PATH.exists():
+        with open(M3_SAMPLE_PATH, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                data = json.loads(line)
+                if data.get("message_type") == "ProposedControlAction" or "breakers" in data:
+                    actions.append(ProposedControlAction.model_validate(data))
+    else:
+        actions = [ProposedControlAction.model_validate(raw) for raw in FALLBACK_M3_ACTIONS]
+
+    assert len(actions) > 0, "No actions loaded from M3 dataset!"
+
+    for action in actions:
         verdict = verifier.verify(action)
-
         assert verdict.action_id == action.action_id
-        assert verdict.decision in ("DECISION_APPROVE", "DECISION_REJECT")
+        assert verdict.decision in (Decision.DECISION_APPROVE, Decision.DECISION_REJECT)
         assert verdict.solve_latency_ms >= 0.0
+
+        trace = verifier.build_rejection_trace(verdict.action_id, verdict.violations)
+        assert 0.0 <= trace.severity <= 1.0
