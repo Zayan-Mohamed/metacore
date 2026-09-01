@@ -5,15 +5,22 @@
  * 28-feature node vector plus a 64-d embedding, and stamps each feature with the
  * QualityMask value the offline artifacts can actually support (ADR 0004).
  *
- * This page is a static prototype — M1's real producer does not exist yet, so the
- * feature values here are representative, not live. The contract shape (feature
- * order, groups, calibration quality, schema version) is taken verbatim from
+ * The feature vector shown here is assembled by the gateway from the offline
+ * calibration artifacts (services/learned/module1_state_forecasting, via
+ * gateway routers/module1.py → module1.assemble). The learned 64-d node_embedding
+ * is a zero placeholder — the ST-GNN encoder that would fill it does not exist yet.
+ * When the gateway is unreachable the page falls back to built-in representative
+ * values, and the badge says so.
+ *
+ * The contract shape (feature order, groups, calibration quality, schema version)
+ * is taken verbatim from
  * packages/contracts/python/metacore_contracts/schema/module1_state_v1.json.
  *
  * Styling follows routes/gating and routes/uncertainty: tokens from
  * src/styles/tokens.css (:root), every number in IBM Plex Mono, div track/fill bars.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { assembleModule1, type Module1AssembleResult, type QualityFlag } from "../../lib";
 import "./agent-state.css";
 
 const EMBEDDING_DIM = 64;
@@ -49,7 +56,8 @@ const GROUPS: GroupMeta[] = [
   { id: "topology", label: "Static topology", source: "GridTopology.Node" },
 ];
 
-// Order, groups and calibration quality are the v1 pin. Values are representative.
+// Order, groups and calibration quality are the v1 pin. `base` values are the
+// offline fallback only — the live path replaces them with assembled numbers.
 const FEATURES: Feature[] = [
   { name: "p_kw_norm", group: "electrical", unit: "p.u. rating", calib: "missing", base: 0.62 },
   { name: "q_kvar_norm", group: "electrical", unit: "p.u. rating", calib: "missing", base: 0.18 },
@@ -91,7 +99,7 @@ interface Island {
   label: string;
   /** NASA POWER site coordinates (nasa_power.ISLAND_SITES). */
   coords: string;
-  /** Small per-island nudge on load and resource, so the vector is not identical. */
+  /** Small per-island nudge on load and resource, so the fallback vector is not identical. */
   loadBias: number;
   windBias: number;
 }
@@ -127,7 +135,7 @@ const SCENARIOS: Scenario[] = [
     scenarioId: "mock-island-cyclone",
     outOfDistribution: true,
     degraded: false,
-    blurb: "Fully observed but out of distribution — falling surface pressure, wind and precip well outside the training range. The mask is unchanged; the values are what shift.",
+    blurb: "The lowest-pressure hour in the island's NASA POWER record — a genuine surface-pressure tail, well outside the training range. The mask is unchanged; the values are what shift.",
   },
   {
     id: "blackout",
@@ -151,13 +159,19 @@ const QUALITY_PROTO: Record<Quality, string> = {
   missing: "QUALITY_MISSING",
 };
 
-/** Runtime quality for this feature under the chosen scenario. */
+const QUALITY_FROM_FLAG: Record<QualityFlag, Quality> = {
+  QUALITY_OBSERVED: "observed",
+  QUALITY_INTERPOLATED: "interpolated",
+  QUALITY_MISSING: "missing",
+};
+
+/** Runtime quality for this feature under the chosen scenario — offline fallback. */
 function runtimeQuality(f: Feature, scenario: Scenario): Quality {
   if (scenario.degraded && f.group === "temporal") return "missing";
   return f.calib;
 }
 
-/** Representative normalised value — deterministic, NOT the real producer. */
+/** Representative normalised value — offline fallback, NOT the real producer. */
 function featureValue(f: Feature, island: Island, scenario: Scenario): number {
   let v = f.base;
   if (f.group === "demand") v += island.loadBias;
@@ -177,32 +191,97 @@ function featureValue(f: Feature, island: Island, scenario: Scenario): number {
   return Number(v.toFixed(2));
 }
 
-interface Derived {
-  observed: number;
-  observedFraction: number;
-  modalitiesPresent: number;
-  perGroup: Array<{ meta: GroupMeta; count: number; quality: Quality; present: boolean }>;
+interface GroupRow {
+  meta: GroupMeta;
+  count: number;
+  quality: Quality;
+  present: boolean;
 }
 
-function derive(scenario: Scenario): Derived {
-  const perGroup = GROUPS.map((meta) => {
-    const members = FEATURES.filter((f) => f.group === meta.id);
-    const qualities = members.map((f) => runtimeQuality(f, scenario));
-    // Group quality = its best feature: observed > interpolated > missing.
-    const quality: Quality = qualities.includes("observed")
+/** Per-group quality = its best feature: observed > interpolated > missing. */
+function groupsFromQuality(quality: Quality[]): GroupRow[] {
+  return GROUPS.map((meta) => {
+    const qualities = FEATURES.map((f, i) => (f.group === meta.id ? quality[i] : null)).filter(
+      (q): q is Quality => q !== null,
+    );
+    const q: Quality = qualities.includes("observed")
       ? "observed"
       : qualities.includes("interpolated")
         ? "interpolated"
         : "missing";
-    return { meta, count: members.length, quality, present: quality !== "missing" };
+    return { meta, count: qualities.length, quality: q, present: q !== "missing" };
   });
+}
 
-  const observed = FEATURES.filter((f) => runtimeQuality(f, scenario) === "observed").length;
+type ViewSource = "live-real" | "live-synthetic" | "fallback";
+
+interface StateView {
+  values: number[];
+  quality: Quality[];
+  observed: number;
+  observedFraction: number;
+  modalitiesPresent: number;
+  perGroup: GroupRow[];
+  scenarioId: string;
+  timestamp: string | null;
+  outOfDistribution: boolean;
+  degraded: boolean;
+  nodeCount: number;
+  nodeNames: string[];
+  hasEmbedding: boolean;
+  source: ViewSource;
+}
+
+function fallbackView(island: Island, scenario: Scenario): StateView {
+  const quality = FEATURES.map((f) => runtimeQuality(f, scenario));
+  const values = FEATURES.map((f) => featureValue(f, island, scenario));
+  const perGroup = groupsFromQuality(quality);
+  const observed = quality.filter((q) => q === "observed").length;
   return {
+    values,
+    quality,
     observed,
     observedFraction: observed / FEATURES.length,
     modalitiesPresent: perGroup.filter((g) => g.present).length,
     perGroup,
+    scenarioId: scenario.scenarioId,
+    timestamp: null,
+    outOfDistribution: scenario.outOfDistribution,
+    degraded: scenario.degraded,
+    nodeCount: 1,
+    nodeNames: ["island"],
+    hasEmbedding: false,
+    source: "fallback",
+  };
+}
+
+function liveView(p: Module1AssembleResult): StateView {
+  // Align the payload to the page's FEATURES order by name, so a schema reorder
+  // can never silently misalign the grid.
+  const byName = new Map(p.feature_names.map((n, i) => [n, i] as const));
+  const values: number[] = [];
+  const quality: Quality[] = [];
+  for (const f of FEATURES) {
+    const i = byName.get(f.name);
+    values.push(i === undefined ? 0 : p.node_features[0][i]);
+    quality.push(i === undefined ? "missing" : QUALITY_FROM_FLAG[p.quality_mask[i]]);
+  }
+  const perGroup = groupsFromQuality(quality);
+  return {
+    values,
+    quality,
+    observed: quality.filter((q) => q === "observed").length,
+    observedFraction: p.observed_fraction,
+    modalitiesPresent: perGroup.filter((g) => g.present).length,
+    perGroup,
+    scenarioId: p.scenario_id,
+    timestamp: p.timestamp_lst,
+    outOfDistribution: p.out_of_distribution,
+    degraded: p.degraded,
+    nodeCount: p.node_count,
+    nodeNames: p.node_names,
+    hasEmbedding: p.has_embedding,
+    source: p.data_source === "real" ? "live-real" : "live-synthetic",
   };
 }
 
@@ -226,15 +305,48 @@ export default function AgentStateRoute() {
   const island = ISLANDS.find((i) => i.id === islandId)!;
   const scenario = SCENARIOS.find((s) => s.id === scenarioId)!;
 
-  const derived = useMemo(() => derive(scenario), [scenario]);
+  const [view, setView] = useState<StateView>(() => fallbackView(island, scenario));
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPending(true);
+    assembleModule1(islandId, scenarioId)
+      .then((p) => {
+        if (!cancelled) setView(liveView(p));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setView(
+            fallbackView(
+              ISLANDS.find((i) => i.id === islandId)!,
+              SCENARIOS.find((s) => s.id === scenarioId)!,
+            ),
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPending(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [islandId, scenarioId]);
 
   const kpis = [
-    { label: "Observed fraction", value: derived.observedFraction.toFixed(3), note: "share QUALITY_OBSERVED" },
-    { label: "Features observed", value: `${derived.observed} / ${FEATURES.length}`, note: "QUALITY_OBSERVED groups" },
-    { label: "Modalities present", value: `${derived.modalitiesPresent} / ${GROUPS.length}`, note: "≥ 1 non-missing feature" },
-    { label: "Embedding dim", value: String(EMBEDDING_DIM), note: "learned per-node width" },
+    { label: "Observed fraction", value: view.observedFraction.toFixed(3), note: "share QUALITY_OBSERVED" },
+    { label: "Features observed", value: `${view.observed} / ${FEATURES.length}`, note: "QUALITY_OBSERVED groups" },
+    { label: "Modalities present", value: `${view.modalitiesPresent} / ${GROUPS.length}`, note: "≥ 1 non-missing feature" },
+    {
+      label: "Embedding dim",
+      value: String(EMBEDDING_DIM),
+      note: view.hasEmbedding ? "learned per-node width" : "reserved — encoder not built",
+    },
     { label: "Schema", value: `v${SCHEMA_VERSION}`, note: "module1_state_v1" },
   ];
+
+  const isLive = view.source !== "fallback";
+  const sourceRoot = view.source === "live-real" ? "data/" : ".synthetic/";
 
   return (
     <div className="agent-state">
@@ -252,9 +364,22 @@ export default function AgentStateRoute() {
               <h1>
                 Module 1 — Multi-Modal Spatiotemporal State Representation
                 <span className="agent-state__badge">m1-state/{SCHEMA_VERSION}</span>
-                <span className="agent-state__badge agent-state__badge--proto" title="M1's producer does not exist yet — feature values here are representative, not live. The contract shape is the v1 pin.">
-                  prototype · static
-                </span>
+                {isLive ? (
+                  <span
+                    className="agent-state__badge agent-state__badge--live"
+                    title="node_features assembled by module1.assemble from the offline calibration artifacts. node_embedding is still a zero placeholder."
+                  >
+                    live · {sourceRoot}
+                  </span>
+                ) : (
+                  <span
+                    className="agent-state__badge agent-state__badge--proto"
+                    title="Gateway unreachable — showing the page's built-in representative values. Run `uv run uvicorn gateway.main:app` from the repo root for a state assembled from data/."
+                  >
+                    offline · representative
+                  </span>
+                )}
+                {pending ? <span className="agent-state__badge">assembling…</span> : null}
               </h1>
               <p className="agent-state__subtitle">
                 Six input modalities fused into one node vector, each feature stamped with the
@@ -268,8 +393,8 @@ export default function AgentStateRoute() {
         <section className="agent-state__card">
           <div className="agent-state__card-title">1. Assemble a state</div>
           <div className="agent-state__card-sub">
-            Island sets the site and a small per-island bias; scenario sets the QualityMask and the
-            value shift.
+            Island sets the NASA POWER site and load series; scenario sets the QualityMask and picks
+            the hour.
           </div>
 
           <div className="agent-state__row-label">Island</div>
@@ -302,8 +427,9 @@ export default function AgentStateRoute() {
 
           <div className="agent-state__scenario-line">
             <span className="mono">
-              site {island.coords} · scenario_id {scenario.scenarioId} · out_of_distribution{" "}
-              {String(scenario.outOfDistribution)} · degraded {String(scenario.degraded)}
+              site {island.coords} · scenario_id {view.scenarioId} · out_of_distribution{" "}
+              {String(view.outOfDistribution)} · degraded {String(view.degraded)}
+              {view.timestamp ? ` · t ${view.timestamp}` : ""}
             </span>
             <p className="agent-state__scenario-blurb">{scenario.blurb}</p>
           </div>
@@ -346,7 +472,7 @@ export default function AgentStateRoute() {
             everything else is interpolated or unavailable.
           </div>
           <div className="agent-state__mods">
-            {derived.perGroup.map(({ meta, count, quality, present }) => (
+            {view.perGroup.map(({ meta, count, quality, present }) => (
               <div className="agent-state__mod" key={meta.id}>
                 <div className="agent-state__mod-head">
                   <span className="agent-state__mod-name">{meta.label}</span>
@@ -373,8 +499,8 @@ export default function AgentStateRoute() {
             0.0 — &ldquo;no lube oil was used&rdquo; and &ldquo;we do not know&rdquo; are different.
           </div>
           <div className="agent-state__mask">
-            {FEATURES.map((f) => {
-              const q = runtimeQuality(f, scenario);
+            {FEATURES.map((f, i) => {
+              const q = view.quality[i];
               return (
                 <span
                   key={f.name}
@@ -398,12 +524,16 @@ export default function AgentStateRoute() {
         <section className="agent-state__card">
           <div className="agent-state__card-title">State vector — {island.label}</div>
           <div className="agent-state__card-sub">
-            node_features[0], 28 columns. Values are representative of a nominal step, not live
-            producer output.
+            node_features[0]
+            {view.nodeCount > 1 ? ` of ${view.nodeCount} — ${view.nodeNames.join(", ")}` : ""}, 28
+            columns.{" "}
+            {isLive
+              ? `Assembled from ${sourceRoot} at ${view.timestamp}.`
+              : "Representative of a nominal step — gateway offline."}
           </div>
           <div className="agent-state__vec">
             {FEATURES.map((f, idx) => {
-              const q = runtimeQuality(f, scenario);
+              const q = view.quality[idx];
               return (
                 <div className="agent-state__cell" key={f.name}>
                   <div className="agent-state__cell-top">
@@ -411,7 +541,7 @@ export default function AgentStateRoute() {
                     <span className="agent-state__cell-dot" style={{ background: QUALITY_COLOUR[q] }} />
                   </div>
                   <div className="agent-state__cell-name">{f.name}</div>
-                  <div className="agent-state__cell-val mono">{featureValue(f, island, scenario).toFixed(2)}</div>
+                  <div className="agent-state__cell-val mono">{view.values[idx].toFixed(2)}</div>
                   <div className="agent-state__cell-foot">
                     <GroupPill group={f.group} />
                     <span className="agent-state__cell-unit">{f.unit}</span>
@@ -432,9 +562,12 @@ export default function AgentStateRoute() {
               only interface between them.
             </li>
             <li>
-              <b>calibration_quality is a floor, not a promise.</b> At runtime the simulator fills
-              the electrical group and the mask is set per step. Here the electrical features show
-              QUALITY_MISSING because that is what the offline artifacts support today.
+              <b>Assembled, not learned.</b> node_features come from module1.assemble over the
+              calibration artifacts (real <span className="mono">data/</span> or the{" "}
+              <span className="mono">.synthetic/</span> stand-in). The electrical group is
+              QUALITY_MISSING because the offline path has no power-flow simulator — the runtime
+              simulator fills it per step. node_embedding is a zero placeholder; the ST-GNN encoder
+              that fills it does not exist yet.
             </li>
             <li>
               <b>Spatial degeneracy.</b> One irradiance series and two wind series cover all four
@@ -442,9 +575,9 @@ export default function AgentStateRoute() {
               cyclone signal but almost no inter-island signal.
             </li>
             <li>
-              <b>Prototype.</b> Feature values are deterministic stand-ins. The contract shape —
-              order, groups, quality, schema version, embedding width — is the v1 pin and will not
-              change without a version bump.
+              <b>Nodes.</b> Each island is a bus plus the generation assets the CEB ledger records —
+              only Eluvaitivu runs a hybrid (PV + storage) plant. A full single-line diagram arrives
+              with the ST-GNN; the grid above shows node 0, the bus.
             </li>
           </ul>
         </section>
