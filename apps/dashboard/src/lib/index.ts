@@ -231,6 +231,62 @@ export async function runModule2(
   );
 }
 
+// ---------------------------------------------------------------- Module 1
+// Assembles one state vector from the offline calibration artifacts via
+// services/learned/module1_state_forecasting/src/module1/assemble.py
+// (gateway routers/module1.py). Standard-library + NumPy, no ML stack.
+
+export class Module1RunError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "Module1RunError";
+  }
+}
+
+export type Module1Scenario = "normal" | "cyclone" | "blackout";
+export type QualityFlag = "QUALITY_OBSERVED" | "QUALITY_INTERPOLATED" | "QUALITY_MISSING";
+
+export interface Module1AssembleResult {
+  island: string;
+  island_name: string;
+  scenario: Module1Scenario;
+  /** ScenarioRef id — a scenario_library window id, or a derived nominal/pmin tag. */
+  scenario_id: string;
+  timestamp_lst: string;
+  out_of_distribution: boolean;
+  degraded: boolean;
+  schema_version: string;
+  embedding_dim: number;
+  /** Always false today — the learned ST-GNN encoder does not exist yet. */
+  has_embedding: boolean;
+  node_count: number;
+  node_names: string[];
+  feature_names: string[];
+  /** [node_count x 28], row-major. The dashboard renders node_features[0] (the bus). */
+  node_features: number[][];
+  /** One Quality per feature, parallel to feature_names. */
+  quality_mask: QualityFlag[];
+  observed_fraction: number;
+  /** "real" when data/ is present, "synthetic" when it fell back to .synthetic/. */
+  data_source: "real" | "synthetic";
+  generated_ms: number;
+}
+
+export async function assembleModule1(
+  island: string,
+  scenario: Module1Scenario,
+  timestamp?: string,
+): Promise<Module1AssembleResult> {
+  return postJson<Module1AssembleResult>(
+    "/api/module1/assemble",
+    { island, scenario, timestamp: timestamp ?? null },
+    (detail, status) => new Module1RunError(detail, status),
+  );
+}
+
 // Pairs each ProposedControlAction with its GatingDecision (and M2 input / M4 verdict
 // context, when present) by action_id, in emission order.
 export interface Module3DecisionRow {

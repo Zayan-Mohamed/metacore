@@ -71,6 +71,10 @@
   color: var(--amber);
   border-color: var(--amber);
 }
+.agent-state__badge--live {
+  color: var(--green);
+  border-color: var(--green);
+}
 .agent-state__subtitle {
   margin: 7px 0 0;
   font-size: 13px;

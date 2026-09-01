@@ -7,7 +7,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from gateway.routers import module2, module3, module4
+from gateway.routers import module1, module2, module3, module4
 
 app = FastAPI(title="MetaCore Gateway")
 
@@ -20,6 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(module1.router, prefix="/api")
 app.include_router(module2.router, prefix="/api")
 app.include_router(module3.router, prefix="/api")
 app.include_router(module4.router, prefix="/api")
