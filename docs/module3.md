@@ -7,7 +7,8 @@ This is the single reference document for Module 3. If something about M3 change
 are the sources of truth; `docs/module3-explained.html` is a generated viva explainer and
 `services/learned/module3_metapolicy/README.md` is the run guide.
 
-> Last verified against code: 2026-10-15, branch `m3/gate-policy` at `0541f39`.
+> Last verified against code: 2026-10-15, branch `m3/gate-policy`. Part I (§1–§13) describes the
+> Week-7 toy; **Part II (§14–§22) describes the Meta-RL pipeline** (PPO + GRU / RL²).
 > Numbers marked *(README, not re-run)* were copied from the module README and have not been
 > re-measured for this document.
 
@@ -335,20 +336,33 @@ compose path is future work).
 
 Derived from the ClickUp list *Metacore M3 – Cost-Aware Metacognitive Gating* and the code.
 
-**Phase A — Foundations & Design (TAF)** — literature done; contracts published; formal MDP
-definition is §2 of this document.
+**Phase A — Foundations & Design (TAF) — COMPLETE.** Literature locked in; contracts published;
+formal MDP definition is §2 of this document (the Meta-RL formulation is Part II, §14–§15).
 
-**Phase B — Prototype / Week-7 demo** — scaffold + Gym env, reward-shaping draft, System 1,
-System 2 stub, threshold gate and toy Meta-RL all exist. Tier-1 rehearsal and the Week-7 demo and
-write-up are tracked outside the repo.
+**Phase B — Prototype / Week-7 demo — COMPLETE.** Scaffold + Gym env, reward-shaping draft,
+System 1, System 2 stub, threshold gate and toy Meta-RL all exist. The Tier-1 file-based dry run
+(M1→M2→M3→M4) worked, and the Charter / Proposal and the toy-Meta-RL demo were submitted. The
+panel's only feedback was to make the data-validation approach explicit; it was already in the
+submission, and it will be stated clearly again at PP1.
+
+**Phase C — Core Gating Engine (PP1, ~50%) — IN PROGRESS.** PP1 deliverable: a working gating
+engine plus System 2 policy with metrics and a live demo. Task order is set in ClickUp; the
+Meta-RL pipeline is first.
+
+* **Meta-RL pipeline — BUILT, AWAITING REVIEW (2026-10-15).** PPO + GRU (RL²) gate, simulated
+  cyclones with four disturbances, physical priority-weighted reward, surrogate-trained /
+  live-M4-tested. Design: Part II (§14–§20). Results: §22. Open caveats: §21 (F1–F8).
+  Not yet done under this task: the dashboard page to set cyclone parameters and test the gate
+  (planned), and the real System 2 (separate task; `deliberative_plan` is a minimal planner).
 
 **Open work (Phases C–F), in rough dependency order**
 
 1. Replace `synthetic_context` with the live M1 `SystemContext` (agree with the M1 owner).
 2. Replace `mock_verify` with real M4 verdicts; implement the M4 → M3 feedback loop.
 3. Real System 2: load-shed prioritisation and critical-load ranking, replacing the stand-in.
-4. Full Meta-RL pipeline with reward shaping on simulated cyclone episodes tied to the OpenDSS
-   twin; swap the mock M2 stream for M2's real uncertainty API.
+4. ~~Full Meta-RL pipeline with reward shaping on simulated cyclone episodes tied to the OpenDSS
+   twin~~ — **built, awaiting review** (Part II). Still open: swap the mock M2 stream for M2's
+   real uncertainty API; replace the placeholder Burevi/Ditwah profiles with real data.
 5. Latency/thermal profiling and enforcement; robust gate tuning (hysteresis, calibrated
    escalation threshold) — also decides MDP vs SMDP (§2.1).
 6. Ablation for the paper: cause-aware gate vs a `competence_drop`-only gate; Meta-RL vs
@@ -368,7 +382,8 @@ write-up are tracked outside the repo.
 |---|---|---|
 | M1 `SystemContext` | mock (`synthetic_context.py`) | live M1 adapter |
 | M2 uncertainty | real published mock stream (`m2-out/0.3`), resampled | M2 real API |
-| M4 verdicts | `mock_verify` | real OpenDSS verdicts over gRPC |
+| M4 verdicts | `mock_verify` (Week-7 demo) · `SurrogateTwin` for Meta-RL training · **real M4 over HTTP for the final test** (`LiveM4Twin`) | real OpenDSS verdicts over gRPC |
+| Cyclone / damage | mock 4-stage ramp (Week-7) · simulated cyclones with 4 disturbances (Meta-RL pipeline); Burevi/Ditwah profiles are placeholders | fitted to real best-track data |
 | System 1 / System 2 | heuristic stand-ins | S2: real optimiser |
 | Transport | JSON, field names from `module3.proto` | gRPC |
 | Serving | Python / gateway subprocess | ONNX + Go `gating_decision_svc` |
@@ -377,7 +392,9 @@ write-up are tracked outside the repo.
 
 ## 12. File map
 
-All paths under `services/learned/module3_metapolicy/` unless noted.
+All paths under `services/learned/module3_metapolicy/` unless noted. **This table covers the
+Week-7 flat files. The Meta-RL pipeline's files (`src/module3/**`, `pipeline.yaml`, `scripts/`)
+are mapped function-by-function in §19.**
 
 | File | Role |
 |---|---|
@@ -415,3 +432,325 @@ cd apps/dashboard && pnpm install && pnpm dev     # open /gating
 Reproducibility: everything is seeded from `config.yaml: seed`; `mock_verify` uses SHA-256
 rather than salted `hash()`. Per-checkpoint model cards are a repo convention and are not yet
 written for M3.
+
+---
+
+# Part II — Meta-RL pipeline (PPO + GRU, RL²-style)
+
+Added 2026-10-15 for the ClickUp task *"Build full Meta-RL training pipeline with reward shaping
+against simulated cyclone episodes linked to OpenDSS twin"*. Parts of §1–§13 describe the Week-7
+toy (REINFORCE + hand-written reward table); that code is **unchanged** and still powers the
+dashboard demo. Everything below is the new pipeline in `src/module3/`.
+Reference papers: [`module3-research.md`](module3-research.md).
+
+## 14. What the pipeline does, in one picture
+
+```
+  random CYCLONE  (scenario/cyclone.py)             M2 uncertainty stream (published mock)
+  wind -> vulnerability, 4 disturbances                          |
+        |                                                        |
+        +--------------> OBSERVATION (14-d) <--------------------+
+                               |
+                               v
+                    RecurrentGate  (GRU memory, PPO-trained)
+                               |  picks  System 1  or  System 2
+              +----------------+-----------------+
+              v                                  v
+   System 1: reactive_plan             System 2: deliberative_plan
+   (vulnerability-based shed)          (reads breaker status, sheds cut-off buses)
+              +----------------+-----------------+
+                               v
+                  GRID TWIN scores the action under the storm's damage
+                  (SurrogateTwin to train  |  LiveM4Twin to test)
+                               v
+        PHYSICAL REWARD = priority-weighted load served
+                          - voltage violations - deliberation cost - latency cost
+```
+
+**Hybrid plan (agreed).** Train on the fast `SurrogateTwin`; test the trained policy against the
+real M4 firewall (`LiveM4Twin`). We never train against live M4: it costs ~13 ms per call (it
+recompiles the circuit every time), so one training run would need ~25 million calls.
+
+## 15. Why PPO + GRU (RL²) — and why not MAML
+
+### The three terms, plainly
+* **PPO** — the algorithm that trains the gate. It improves the policy in small, *clipped* steps
+  so one noisy batch of storms cannot undo earlier learning.
+* **GRU** — a small recurrent layer with a memory. The gate sees the last step's action and reward
+  as well as the current observation, so it can notice patterns like "uncertainty has been rising
+  for five steps".
+* **RL²** — the idea that makes it *Meta*-RL: train that recurrent policy across many different
+  cyclones. The memory then learns to work out *which kind of storm this is* and to behave
+  accordingly — adaptation by a forward pass, not by retraining.
+
+### Why RL² and not MAML  *(a design decision to defend — read carefully)*
+MAML (Finn et al. 2017) is the other well-known meta-learning method. It trains a starting set of
+weights so that **a few gradient-descent steps on data from a new task** give a good policy. We
+did not use it because it does not fit what the gate has to do:
+
+1. **There is no spare data to adapt on.** MAML adapts by *collecting trajectories from the new
+   task, then taking gradient steps, then acting*. A "task" for us is a single cyclone and one
+   80-step episode that is lived once. There is no earlier run of that storm to learn from. RL²
+   adapts *during* the episode, from what it has seen so far.
+2. **Adaptation would sit in the real-time path.** The trained gate is exported to ONNX and served
+   from Go (`gating_decision_svc`) inside a ~50 ms end-to-end reactive budget that M4 also needs.
+   MAML needs gradient computation and an optimiser at deployment; RL² needs one GRU forward pass
+   per step with a small hidden vector carried between steps.
+3. **It is harder to train.** MAML for RL differentiates through policy-gradient estimates
+   (second-order terms), which are noisy and unstable; our rewards are already sparse, driven by
+   rare feeder trips. PPO + GRU is a standard, stable recipe.
+4. **The thing to adapt to is a latent state, not a new skill.** What differs between storms is
+   hidden (how exposed is the grid *right now*; is M2's `u` telling the truth?). A memory that
+   infers a hidden state is the natural tool; fast re-training is not what is needed.
+5. **Evidence.** Ni et al. (ICML 2022) report that recurrent model-free RL is a strong baseline
+   against specialised meta-RL/POMDP methods. A simple baseline that holds up is the right default
+   for a safety-critical component.
+
+### MAML stays as an option
+`policy.meta_method` in `pipeline.yaml` is `rl2` (used). The value `maml` is **reserved**: the
+pipeline raises `NotImplementedError` with a pointer here. MAML becomes the right tool if:
+
+* we want **site-specific adaptation offline** — fine-tune a trained gate on logged storms from a
+  *new* microgrid, where there is data and time for gradient steps (not in the hot loop); or
+* the **topology changes** between deployments and few-shot adaptation to a new grid is needed.
+
+To add it: implement `train/maml.py` (inner loop = a few PPO/REINFORCE steps on one task's
+trajectories; outer loop = update the initial weights), reuse `CycloneGatingEnv` and
+`RecurrentGate(arch="mlp")` unchanged, and add the comparison to the ablation table.
+
+### The ablation that keeps us honest
+`--ablate-mlp` trains the *same* network with the GRU swapped for a memoryless layer. If the GRU
+gate does not beat the MLP gate, the memory is not earning its keep and the paper must say so.
+
+## 16. The simulated cyclone — the four disturbances
+
+Code: `src/module3/scenario/cyclone.py`. One storm is generated up front from a seed (a cyclone
+does not react to what the controller does), so every policy can be scored on the *identical*
+storm. Wind follows a bell-shaped pulse; the severity stage comes from wind speed
+(≥ 40 elevated, ≥ 80 severe, ≥ 120 extreme, km/h).
+
+| # | Disturbance | How it is modelled | Parameter |
+|---|---|---|---|
+| 1 | **PV derate** | PV output falls linearly from 100% at 50 km/h to 0% at 100 km/h | cut-in / cut-out wind |
+| 2 | **Overhead-feeder trips** | each step an overhead feeder (`Line_N8_N11`, `Line_N8_N12`) trips with probability `trip_scale × v³ × boost`, v = vulnerability of its end node; a trip is **permanent** | `trip_scale`, `ood_trip_boost` |
+| 3 | **Diesel availability** | once the storm is severe, each step has a chance a diesel unit is lost for the rest of the episode (availability drops to 50%) | `diesel_loss_prob` |
+| 4 | **Communications cut** | outages start more often in high wind and last 3–8 steps; M2 then reports `sensing` (or `both`) and what the controller *knows* freezes at its last good value | `comms_rate` |
+
+`ood=True` storms are "unseen conditions": M2 reports value-axis uncertainty (`value`) and trips
+are more likely than System 1's vulnerability rule anticipates. This is what makes `u` informative.
+
+**Task distribution (training).** Peak wind 45–190 km/h, peak position 0.35–0.70 of the episode,
+width 0.07–0.20, 30% OOD. **Held-out profiles (testing):** `burevi_like`, `ditwah_like`.
+
+> ⚠ These two are **placeholder parameter sets** with a plausible shape, not fitted to real track
+> data. No survivability claim may be made about the real cyclones until they are replaced with
+> best-track / wind data. Tracked in `module3-research.md` → "Still to read / cite properly".
+
+## 17. The grid twin: surrogate for training, real M4 for testing
+
+| | `SurrogateTwin` | `LiveM4Twin` |
+|---|---|---|
+| File | `twin/surrogate.py` | `twin/live_m4.py` |
+| Speed | microseconds | ~13 ms per call (HTTP + circuit recompile) |
+| Used for | PPO training, bulk evaluation | final test of trained policies |
+| Imports OpenDSS? | no | no — talks HTTP to `POST /api/module4/verify` |
+
+M3 may not import OpenDSS (ADR 0003), so `twin/topology.py` restates the grid facts and
+`tests/test_twin_topology.py` parses `delft_3island.dss` and fails if they ever drift.
+
+**How the storm is applied to the real M4 without changing it.** The disturbance rides along as
+extra commands in the verify request: a tripped line becomes `{edge_id, closed: false}`; PV/diesel
+loss becomes a lowered dispatch setpoint. (A native `scenario` field would be cleaner — see §21.)
+
+**Validation.** `scripts/validate_surrogate.py` replays random scenarios on both twins:
+300 cases → **97% agreement** on APPROVE/REJECT and on the exact set of violating buses; mean
+absolute error in served-load fraction 0.004. Every disagreement was *surrogate rejects, live M4
+approves* — see finding F2 in §21.
+
+## 18. The physical reward — what we prioritise and how
+
+```
+reward = w_serve * served_fraction
+       - w_viol  * (violating buses / 10)
+       - deliberation_cost            (only if System 2 was used)
+       - w_latency * path_latency_ms / 50 ms
+```
+Defaults (`pipeline.yaml`): `w_serve=1.0, w_viol=2.0, deliberation_cost=0.05, w_latency=0.05`;
+latency 2 ms (S1) / 18 ms (S2) are stand-ins until the profiling task measures them.
+
+**What "priority-weighted load served" prioritises.** Each node has a priority tier, and a kW
+served at a higher tier counts more:
+
+| Tier | Nodes | Weight | Meaning |
+|---|---|---|---|
+| 1 | N1, N2, N3 | 3 | critical — never shed by either control path |
+| 2 | N4, N5, N6 | 2 | important |
+| 3 | N8, N9, N11, N12 | 1 | sheddable first |
+
+`served_fraction = Σ weight × load_kW × (1 − shed) × [bus energised]  /  Σ weight × load_kW`.
+So losing 100 kW of tier-1 load costs three times losing 100 kW of tier-3 load, and a bus that a
+tripped feeder cuts off counts as fully unserved. Code: `twin/scoring.py::priority_weighted_served`
+(weights editable in `pipeline.yaml: tier_weights`), combined in `env/reward.py::step_reward`.
+
+Versus the Week-7 table (`gating_env.py`: 7 hand-written cases such as "escalate on a calm step:
+−0.8"): the new reward scores **outcomes on the grid**, so no rule has to be guessed. The old table
+stays as the dashboard demo and as an ablation baseline.
+
+## 19. Code map — where everything is, and what goes in and out
+
+All paths under `services/learned/module3_metapolicy/` (`src/module3/` unless noted).
+
+### 19.1 System 1 — the reactive path
+| Function | File | Input → Output |
+|---|---|---|
+| `system1_action(obs_raw)` | `system1.py` (flat, Week-7) | `obs_raw` dict with `max_node_vulnerability`, `trigger_reason`, `top_at_risk_nodes` → `{origin:"SYSTEM1", breakers:[], load_shed:[{node_id, shed_fraction, priority_tier}], dispatch:[], rationale}` |
+| `reactive_plan(context, trigger_reason)` | `control/reactive.py` | thin wrapper: merges the two inputs and calls `system1_action` (one shared System 1) |
+
+How it decides: sheds `vulnerability × 0.8` of load (× 0.45 if telemetry is lost, max 0.25 per
+node), lowest-priority tiers first, never tier 1. Uses `priority.py::PRIORITY`. **It never looks at
+which lines are tripped** — that blindness is what System 2 fixes.
+
+### 19.2 System 2 — the deliberative path
+| Function | File | Input → Output |
+|---|---|---|
+| `deliberative_plan(known_tripped, context)` | `control/planner.py` | set of lines believed tripped (stale if comms are down) → `{origin:"SYSTEM2", load_shed:[100% of every cut-off bus], breakers:[], dispatch:[], rationale}` |
+| `energized_buses(tripped)` | `twin/surrogate.py` | tripped line names → set of buses still connected to the source (graph walk) |
+| `system2_action(obs_raw, rng)` | `system2.py` (flat, Week-7) | the old stand-in used by the dashboard: protects tier 1, closes `E_crit_1`, bumps `N4` dispatch |
+
+`deliberative_plan` is the *smallest planner that makes the physical reward meaningful*. It is
+**not** the final System 2 (separate ClickUp task: load-shed prioritisation / critical-load
+ranking). System 2 thinks about the grid (topology); System 1 only thinks about exposure.
+
+### 19.3 The gate (the learned part)
+| Item | File | What it does |
+|---|---|---|
+| `RecurrentGate` | `policy/recurrent_gate.py` | GRU (or MLP) actor-critic. Input = 14-d obs + prev action + prev reward + trial-done flag (18-d). Output = 2 logits (S1/S2), a value, the memory. Masks S2 when the budget is 0. |
+| `build_inputs(obs, prev_action, prev_reward, trial_done)` | same | assembles the 18-d RL² input |
+| `collect_tasks(env, model, n_tasks, trials, rng)` | `train/ppo.py` | runs the gate through storms, records what PPO needs |
+| `compute_gae(rewards, values, γ, λ)` | same | advantages and return targets |
+| `ppo_update(model, opt, batch, cfg, rng)` | same | clipped PPO epochs over whole-storm minibatches |
+| `train_gate(env, model, cfg, trials, seed)` | same | the training loop |
+
+### 19.4 Environment, scenario, twin, reward
+| Item | File | Input → Output |
+|---|---|---|
+| `CycloneGatingEnv` (`reset`, `step`) | `env/cyclone_env.py` | `step(0/1)` → obs (14), reward, truncated, `info` (served, violations, reward parts, …) |
+| `describe_observation(obs)` | same | names/sources for each of the 14 slots |
+| `step_reward(outcome, used_s2, cfg)` | `env/reward.py` | twin outcome → `(reward, parts)` |
+| `generate_episode(params, n, rng)` | `scenario/cyclone.py` | storm parameters → `CycloneEpisode` (`.disturbance(t)`, `.known(t)`, `.context(t)`) |
+| `sample_params`, `resolve_params`, `PROFILES` | same | random storm / named profile |
+| `SurrogateTwin.evaluate(action, disturbance)` | `twin/surrogate.py` | → `TwinOutcome(approved, violating_buses, served_fraction, …)` |
+| `LiveM4Twin.evaluate`, `merge_with_overlay`, `overlay_commands` | `twin/live_m4.py` | same interface, over HTTP |
+| `priority_weighted_served`, `shed_fractions` | `twin/scoring.py` | shed plan + energised buses → 0..1 |
+| grid constants | `twin/topology.py` | nodes, loads, generators, lines, tiers, exposure |
+
+### 19.5 Evaluation and the runner
+| Item | File | What it does |
+|---|---|---|
+| `run_episode`, `evaluate_policy`, `aggregate` | `train/evaluate.py` | play identical storms with `always_s1`, `always_s2`, `threshold`, `breaker_rule`, `oracle`, `gate` |
+| `run`, `main` | `train/pipeline.py` | seeds → train → test on random + held-out → optional live-M4 test → `results.json` + `report.md` |
+| `validate_surrogate.py` | `scripts/` | surrogate-vs-live agreement check |
+| `pipeline.yaml` | module root | every knob |
+| `_flat.py` | `src/module3/` | temporary bridge to the flat files (`system1.py`, `m2_stream.py`) |
+
+**The 14-d observation** (slots 0–11 identical to the toy env; 12–13 are new): `0 u · 1 reason_value ·
+2 reason_sensing · 3 state_class · 4–6 class_prob · 7 max_node_vulnerability · 8 severity ·
+9 time_to_hazard · 10 budget_remaining · 11 observed_fraction · 12 tripped_visible (share of
+overhead feeders known tripped) · 13 gen_available_visible`. Slots 12–13 come from breaker/SCADA
+status and freeze at their last value when telemetry is lost.
+
+### 19.6 The baselines (what the gate must beat)
+`always_s1`, `always_s2` · `threshold` (S2 iff `u > 0.40`) · `breaker_rule` (S2 iff a tripped
+feeder is visible and storm ≥ elevated) · `oracle` (S2 iff a feeder is *actually* tripped — uses
+ground truth the gate cannot see, so it is a ceiling, not a competitor).
+
+## 20. How to run
+
+```bash
+# from services/learned/module3_metapolicy/  (workspace venv: .venv at the repo root)
+python -m module3.train.pipeline --quick                         # ~20 s smoke run
+python -m module3.train.pipeline --ablate-mlp                    # 5 seeds + memoryless ablation
+python -m module3.train.pipeline --ablate-mlp --live-m4 http://127.0.0.1:8000   # + real-M4 test
+python scripts/validate_surrogate.py --n 300                     # surrogate vs real M4
+# live tests need the gateway:  uv run uvicorn gateway.main:app --app-dir services/gateway --port 8000
+pytest tests -q
+```
+Outputs land in `artifacts/pipeline/<run>/` (git-ignored): `results.json`, `report.md`, one
+`gate_seed<N>.pt` per seed. **Planned, not built:** a dashboard page to set cyclone parameters,
+run the gate and watch decisions/violations step by step.
+
+## 21. Findings and open questions for the team (from building and probing the pipeline)
+
+Everything here was observed by running the real M4 locally on 2026-10-15; reproduction steps
+are given so the owner can confirm. **F2 and F3 are for Hariswara (M4).**
+
+| # | Finding | Evidence | Effect on M3 | Ask |
+|---|---|---|---|---|
+| **F1** | **Buses N7 and N10 do not exist in the twin.** The Week-7 flat code (`synthetic_context.NODE_POOL`, `priority.PRIORITY`, `mock_verify`) still uses N1..N12. | `delft_3island.dss` has no N7/N10; M4 returns `MALFORMED_ACTION` for any action naming them (probe: shed N7 → REJECT). | The Meta-RL pipeline uses the real 10 nodes only. The dashboard demo would be rejected by live M4 whenever S1/S2 picked N7/N10. | M3 (me): fix the flat code before wiring the demo to live M4. |
+| **F2** | **M4's load matching is a substring match.** `set_load_shed("N1", 1.0)` also zeroes `Load_N11` and `Load_N12` (`node_id.lower() in load_name.lower()`). | Direct call to `CircuitTwin.set_load_shed("N1", 1.0)` changed N1 (150→0), **N11 (80→0), N12 (90→0)**. `N2` alone is correct. | None for training (the pipeline never sheds N1). It would silently over-shed in production. | Hariswara: match on the bus name exactly (`circuit.py::set_load_shed`, also `set_generator_dispatch`). |
+| **F2b** | **M4 sometimes approves a state with a dead bus that still carries load.** | Trip `Line_N8_N12` alone → REJECT (N12 at 0 pu). Trip `Line_N8_N12` + `Line_N4_N6` and shed N6 100% → **APPROVE**, although N12 (90 kW) is de-energised. 3% of 300 random cases disagreed with the surrogate this way. | The surrogate is *stricter* than M4 here (it rejects). Not used to justify any M3 result. | Hariswara: check how bus voltages are read when several buses are islanded (`get_bus_voltages_pu`). Possibly related to F2 (not confirmed). |
+| **F3** | **The stiff slack source (100 MVA short-circuit) makes generation disturbances invisible to the verdict.** PV derate and diesel loss never produce a violation; only topology (feeder/tie trips) does. | Probe: PV → 0 kW, all diesel → 0 kW both APPROVE. Tripping `Line_Source_N1` collapses *every* bus to 0 pu because no local source is grid-forming. | Disturbances #1 and #3 reach the gate through its observation (`gen_available_visible`) but do not change the reward. Honest consequence: the pipeline is currently driven by **feeder trips and comms loss**. | Hariswara: add a "grid-lost" scenario with grid-forming local diesel/BESS so islanded operation is representable; then PV/diesel losses and System 2 *dispatch* start to matter. |
+| **F4** | **Priority tiers disagree.** The `.dss` names loads `_Pri` for N1, N3, N4 and `_NonPri` for N2, N5; M3's tier map says N1–N3 critical, N4–N6 important. | `delft_3island.dss` load names vs `priority.py`. | The reward weights follow M3's map. | Agree one critical-load list with Hariswara/the supervisor; it directly sets what "priority-weighted" means. |
+| **F5** | **`verify()` costs ~13 ms, but only ~0.2 ms is the power-flow solve.** The rest is recompiling the circuit on every call (`reset_to_base`). | Timed 20 calls; M4's own `solve_latency_ms` reports only the solve. | The latency terms in the reward and the "latency under load" task must not quote 0.2 ms as the M4 cost. | Hariswara: snapshot/restore instead of recompiling; report end-to-end latency. |
+| **F6** | **Severity-monotone escalation is the wrong yardstick once storms cause damage.** A tripped feeder stays out after the wind drops, so escalating late in an episode is *correct*. | Gate escalates at stage `normal` when a feeder is still out. | The report shows escalation **conditional on damage** (S2 rate if a feeder is out vs if the grid is intact) instead of only by severity. | none |
+| **F7** | The historical profiles are placeholders. | `scenario/cyclone.py::PROFILES`. | Held-out results are about *a held-out storm shape*, not Burevi/Ditwah. | Get best-track/wind data. |
+| **F8** | The surrogate has no thermal or over-voltage model. | `twin/surrogate.py` docstring. | Fine while no policy proposes extreme dispatch; must be revisited when System 2 starts dispatching. | Revisit with the proper System 2 task. |
+
+**Requested M4 interface change (nice-to-have).** A native `scenario` field on `/verify`
+(tripped lines, PV/diesel factors) so M3 stops encoding storm damage as fake breaker/dispatch
+commands. Needs Hariswara's agreement before any change.
+
+## 22. Results — first full run (2026-10-15)
+
+Run: `python -m module3.train.pipeline --ablate-mlp --live-m4 http://127.0.0.1:8000`; 5 seeds,
+120 PPO updates × 16 storms each, 39 min wall clock. Per-storm return over 80 steps, higher is
+better, mean ± std across the 5 training seeds. Every policy is scored on identical storms.
+Full tables: `artifacts/pipeline/run_5seed/report.md` (git-ignored; regenerate with the command).
+
+| policy | fresh random storms | held-out `ditwah_like` | held-out `burevi_like` |
+|---|---|---|---|
+| always S1 | 68.98 ± 1.23 | 64.12 ± 0.82 | 73.49 ± 0.90 |
+| always S2 | 67.74 ± 1.04 | 62.17 ± 0.81 | 71.58 ± 0.75 |
+| threshold (`u > 0.40`) | 70.25 ± 1.21 | 66.53 ± 0.61 | 73.54 ± 0.85 |
+| breaker rule | **72.26 ± 0.80** | 67.59 ± 0.62 | **75.03 ± 0.64** |
+| oracle (cheats, ceiling) | 75.03 ± 0.46 | 73.89 ± 0.23 | 76.80 ± 0.43 |
+| **gate (GRU, PPO)** | 70.93 ± 3.58 | **68.32 ± 4.71** | 73.95 ± 2.03 |
+| gate, memoryless (MLP) | 70.52 ± 2.99 | 66.93 ± 3.91 | 74.03 ± 1.56 |
+
+Per-seed return on fresh storms (the spread is the story):
+
+| seed | 0 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| gate (GRU) | 74.56 | 74.07 | 67.70 | 66.76 | 71.55 |
+| gate (MLP) | 73.40 | 69.79 | 67.70 | 67.77 | 73.92 |
+| breaker rule | 72.29 | 72.82 | 71.31 | 71.65 | 73.24 |
+
+### What this does and does not show
+* **The pipeline works end to end** — training, held-out testing, ablation, and a real-M4 test.
+* **The trained gate beats the naive baselines on average** (always-S1/S2, and the `u`-threshold
+  on held-out `ditwah_like`), and in 2 of 5 seeds (0, 1) it beats *every* non-cheating baseline and
+  gets close to the oracle (74.6 vs 75.0).
+* **It is NOT yet reliably better than a simple breaker-status rule.** Averaged over seeds the gate
+  (70.93) trails the rule (72.26), because **PPO training is unstable across seeds**: seeds 2 and 3
+  never left the "always System 1" behaviour (≈ 67–68, the always-S1 level). Any paper claim must
+  be made on the distribution over seeds, not on seed 0.
+* **GRU vs MLP is not distinguishable** at this sample size (70.9 vs 70.5; ranges overlap). Do not
+  claim memory helps until a longer or tuned run separates them. `ditwah_like` leans GRU
+  (68.3 vs 66.9) but the std is ~4.
+* **Live M4 agrees with the surrogate on every policy** (return gap 0.00 in all 21 cells, seed-0
+  gate, 6 storms per suite; ~10k real verify calls). This confirms the surrogate for the actions
+  these policies produce; it does not contradict the 97% random-case agreement in §17, because
+  the two control paths never emit the odd multi-trip corner cases where they differ (F2b).
+  Caveat: seed 0 is the *best* seed, and 6 storms is small.
+* **Escalation tracks damage, not just severity** (see F6): the oracle escalates 91–97% of
+  steps when a feeder is out and 0% otherwise; the gate does 37–43% when out and ~19% when the
+  grid is intact — it still wastes budget on intact-grid steps and misses many real outages.
+
+### Why it is not yet better, and what to try (in order)
+1. **Stabilise training**: more updates and larger batches; lower learning rate; behaviour-clone
+   the gate onto the breaker rule first, then fine-tune with PPO (the same recipe the Week-7
+   demo used); normalise rewards.
+2. **Sharper reward signal**: the cost of one dead bus (0.2 + lost load) vs one S2 call (0.07) is
+   modest, so "do nothing" is a deep local optimum. Try a larger `w_viol` and re-check.
+3. **Longer horizon / `trials_per_task` > 1** to give the GRU something to adapt over.
+4. **Re-run with ≥ 10 seeds** once stable, and report confidence intervals.
