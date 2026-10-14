@@ -1,0 +1,56 @@
+# Meta-RL pipeline config (PPO + GRU, RL^2-style). Read by `python -m module3.train.pipeline`.
+seed: 0
+k_classes: 3
+m2_stream_path: null          # null -> vendored sample_m2_to_m3.jsonl
+
+env:
+  episode_len: 80
+  budget_per_episode: 45      # S2 calls allowed per cyclone
+
+scenario:                     # the training task distribution (random cyclones)
+  peak_wind_kmh: [45.0, 190.0]
+  peak_frac: [0.35, 0.70]
+  width_frac: [0.07, 0.20]
+  p_ood: 0.30                 # share of storms whose conditions are 'unseen' (M2 value axis)
+  trip_scale: 0.12
+  comms_rate: 0.10
+  diesel_loss_prob: 0.15
+
+tier_weights: {1: 3.0, 2: 2.0, 3: 1.0}   # priority weighting for 'load served'
+
+reward:
+  w_serve: 1.0
+  w_viol: 2.0
+  deliberation_cost: 0.05
+  w_latency: 0.05
+  latency_s1_ms: 2.0
+  latency_s2_ms: 18.0
+  latency_budget_ms: 50.0
+
+policy:
+  meta_method: rl2            # rl2 = memory-based (used) | maml = RESERVED, not implemented (docs/module3.md)
+  arch: gru                   # gru = RL^2-style recurrent gate | mlp = memoryless ablation
+  hidden: 64
+  trials_per_task: 1          # >1 carries GRU memory across repeated trials of the SAME storm
+
+ppo:
+  updates: 120                # PPO iterations
+  tasks_per_update: 16        # storms collected per iteration
+  epochs: 4
+  minibatch_tasks: 8
+  lr: 0.001
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip: 0.2
+  vf_coef: 0.5
+  ent_coef: 0.01
+  max_grad_norm: 0.5
+
+eval:
+  seeds: [0, 1, 2, 3, 4]      # independent training runs ("five seeds")
+  episodes_random: 40         # fresh random cyclones per seed
+  episodes_per_profile: 20    # per held-out historical-style profile
+  profiles: [burevi_like, ditwah_like]
+  threshold_u: 0.40           # the 'why not just a threshold?' baseline
+  live_m4_url: null           # e.g. http://127.0.0.1:8000 -> final test on the REAL firewall
+  live_episodes: 6            # episodes per policy for the live test (each step ~13 ms)

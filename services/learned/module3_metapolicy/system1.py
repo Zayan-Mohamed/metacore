@@ -16,6 +16,12 @@ def system1_action(obs_raw: dict) -> dict:
     Under a sensing drop (comms blackout), shed more conservatively — Duwaragie's
     guidance: missing data → conservative System-1 fallback, not deliberation.
     Leaves dispatch untouched. origin = SYSTEM1.
+
+    INPUT  obs_raw (dict) -- reads: max_node_vulnerability (0..1), trigger_reason
+           (none|value|sensing|both), top_at_risk_nodes (list of node ids).
+    OUTPUT dict with origin="SYSTEM1", breakers=[], load_shed=[{node_id, shed_fraction,
+           priority_tier}], dispatch=[], rationale (str).
+    USES   priority.PRIORITY (node -> tier). Never sheds tier 1.
     """
     vuln = float(obs_raw.get("max_node_vulnerability", 0.0))
     reason = str(obs_raw.get("trigger_reason", "none"))

@@ -14,6 +14,14 @@ def system2_action(obs_raw: dict, rng) -> dict:
     """Deliberative path: protect tier-1 nodes; also adjust dispatch setpoints.
 
     Sheds less on critical nodes and adds a small diesel/BESS dispatch bump.
+
+    INPUT  obs_raw (dict) -- reads: max_node_vulnerability (0..1), top_at_risk_nodes.
+           rng -- numpy Generator, only used for +-5 kW jitter on the dispatch setpoint.
+    OUTPUT dict with origin="SYSTEM2", breakers=[E_crit_1 closed], load_shed=[...],
+           dispatch=[N4 setpoint], rationale (str).
+    USES   priority.PRIORITY. Never sheds tier 1.
+    NOTE   This is the WEEK-7 stand-in used by the dashboard demo. The Meta-RL pipeline uses
+           module3.control.planner.deliberative_plan instead.
     """
     vuln = float(obs_raw.get("max_node_vulnerability", 0.0))
     top = list(obs_raw.get("top_at_risk_nodes") or ["N12", "N11"])
