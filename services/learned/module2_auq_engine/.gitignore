@@ -1,2 +1,6 @@
 # Rendered by plots.py (viz extra). The tables they draw from are committed.
 *.png
+
+# Baseline models + calibration fixture trained on first infer_one.py call. Derived from
+# seeded data, so reproducible from scratch — never a build input.
+.dashboard_cache/

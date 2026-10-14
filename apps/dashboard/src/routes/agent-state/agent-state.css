@@ -1,0 +1,426 @@
+/**
+ * Module 1 page — component styles only.
+ * Colour tokens come from src/styles/tokens.css (:root), imported in main.tsx.
+ * Conventions (card, KPI grid, chip strip, legend) mirror routes/gating and
+ * routes/uncertainty.
+ */
+.agent-state {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+.agent-state * {
+  box-sizing: border-box;
+}
+
+.agent-state .mono {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.agent-state__inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 36px 40px 64px;
+}
+
+/* header */
+.agent-state__header {
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.agent-state__title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.agent-state__mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--green);
+  flex-shrink: 0;
+}
+.agent-state h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.agent-state__badge {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+.agent-state__badge--proto {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+.agent-state__badge--live {
+  color: var(--green);
+  border-color: var(--green);
+}
+.agent-state__subtitle {
+  margin: 7px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 74ch;
+}
+
+/* card */
+.agent-state__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 22px;
+  margin-top: 20px;
+}
+.agent-state__card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.agent-state__card-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  max-width: 78ch;
+}
+
+/* controls */
+.agent-state__row-label {
+  margin-top: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.agent-state__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+.agent-state__btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--amber);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+.agent-state__btn--ghost {
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+.agent-state__scenario-line {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.agent-state__scenario-line .mono {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+.agent-state__scenario-blurb {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  max-width: 78ch;
+}
+
+/* KPI row — five metrics, like routes/uncertainty */
+.agent-state__kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+.agent-state__kpi {
+  margin-top: 0;
+}
+.agent-state__kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.agent-state__kpi-value {
+  font-size: 26px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+.agent-state__kpi-note {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* pipeline strip */
+.agent-state__pipeline {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 18px;
+}
+.agent-state__pipe-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.agent-state__chip {
+  position: relative;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 13px;
+  min-width: 128px;
+}
+.agent-state__chip--gate {
+  border: 2px solid var(--green);
+  background: var(--green-soft);
+}
+.agent-state__chip-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.agent-state__chip-note {
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+.agent-state__chip-tag {
+  display: inline-block;
+  margin-top: 7px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--green);
+  background: var(--green-soft);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.agent-state__pipe-arrow {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+/* modalities */
+.agent-state__mods {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+.agent-state__mod {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.agent-state__mod-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.agent-state__mod-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.agent-state__qpill {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.agent-state__mod-source {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.agent-state__mod-count {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* quality mask strip */
+.agent-state__mask {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 16px;
+}
+.agent-state__mask-cell {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+}
+.agent-state__legend {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.agent-state__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+.agent-state__legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+/* state vector grid */
+.agent-state__vec {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+.agent-state__cell {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.agent-state__cell-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.agent-state__cell-idx {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.agent-state__cell-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.agent-state__cell-name {
+  font-size: 11px;
+  color: var(--text);
+  margin-top: 4px;
+  word-break: break-all;
+}
+.agent-state__cell-val {
+  font-size: 18px;
+  font-weight: 600;
+  margin-top: 6px;
+  color: var(--text);
+}
+.agent-state__cell-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.agent-state__cell-unit {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.agent-state__gpill {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 1px 5px;
+  text-transform: lowercase;
+}
+.agent-state__gpill--electrical {
+  color: var(--red);
+  background: var(--red-soft);
+}
+.agent-state__gpill--resource {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+.agent-state__gpill--meteorology {
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+.agent-state__gpill--demand {
+  color: var(--violet);
+  background: var(--violet-soft);
+}
+.agent-state__gpill--temporal {
+  color: var(--green);
+  background: var(--green-soft);
+}
+.agent-state__gpill--topology {
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+/* notes */
+.agent-state__notes ul {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.agent-state__notes li {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  max-width: 88ch;
+}
+.agent-state__notes b {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+@media (max-width: 1000px) {
+  .agent-state__kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .agent-state__mods {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .agent-state__vec {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .agent-state__inner {
+    padding: 28px 20px 48px;
+  }
+}

@@ -159,7 +159,13 @@ export async function processModule3Gate(): Promise<Module3ProcessResult> {
   return postModule3("/api/module3/process");
 }
 
-async function postModule3<T>(url: string, body?: unknown): Promise<T> {
+// Shared POST + FastAPI error unwrapping. `detail` is a string for our own HTTPExceptions
+// and an array of {msg} for pydantic validation errors.
+async function postJson<T>(
+  url: string,
+  body: unknown,
+  makeError: (detail: string, status: number) => Error,
+): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -173,9 +179,112 @@ async function postModule3<T>(url: string, body?: unknown): Promise<T> {
         : Array.isArray(payload?.detail)
           ? payload.detail.map((d: { msg?: string }) => d.msg).join("; ")
           : `request failed with status ${res.status}`;
-    throw new Module3RunError(detail, res.status);
+    throw makeError(detail, res.status);
   }
   return (await res.json()) as T;
+}
+
+async function postModule3<T>(url: string, body?: unknown): Promise<T> {
+  return postJson<T>(url, body, (detail, status) => new Module3RunError(detail, status));
+}
+
+// ---------------------------------------------------------------- Module 2
+// Scores one situation against the trained EDL engine via
+// services/learned/module2_auq_engine/infer_one.py (gateway routers/module2.py).
+
+export class Module2RunError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "Module2RunError";
+  }
+}
+
+export interface Module2RunResult {
+  /** Plain epistemic vacuity u = K/S, quality-blind. */
+  u: number;
+  /** Quality-aware u' — what M3 actually gates on. */
+  u_q: number;
+  /** Total evidence mass S = K + Σe. */
+  evidence: number;
+  observed_fraction: number;
+  trigger: boolean;
+  reason: "none" | "value" | "sensing" | "both";
+  latency_ms: number;
+  baselines: { softmax: number; mc_dropout: number; edl: number };
+  /** "onnx" when the exported graph ran, "torch" when it fell back to the head. */
+  backend: string;
+  /** Calibrated value-axis threshold the trigger compared u against. */
+  value_threshold: number;
+}
+
+export async function runModule2(
+  novelty: number,
+  observedFraction: number,
+): Promise<Module2RunResult> {
+  return postJson<Module2RunResult>(
+    "/api/module2/run",
+    { novelty, observed_fraction: observedFraction },
+    (detail, status) => new Module2RunError(detail, status),
+  );
+}
+
+// ---------------------------------------------------------------- Module 1
+// Assembles one state vector from the offline calibration artifacts via
+// services/learned/module1_state_forecasting/src/module1/assemble.py
+// (gateway routers/module1.py). Standard-library + NumPy, no ML stack.
+
+export class Module1RunError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "Module1RunError";
+  }
+}
+
+export type Module1Scenario = "normal" | "cyclone" | "blackout";
+export type QualityFlag = "QUALITY_OBSERVED" | "QUALITY_INTERPOLATED" | "QUALITY_MISSING";
+
+export interface Module1AssembleResult {
+  island: string;
+  island_name: string;
+  scenario: Module1Scenario;
+  /** ScenarioRef id — a scenario_library window id, or a derived nominal/pmin tag. */
+  scenario_id: string;
+  timestamp_lst: string;
+  out_of_distribution: boolean;
+  degraded: boolean;
+  schema_version: string;
+  embedding_dim: number;
+  /** Always false today — the learned ST-GNN encoder does not exist yet. */
+  has_embedding: boolean;
+  node_count: number;
+  node_names: string[];
+  feature_names: string[];
+  /** [node_count x 28], row-major. The dashboard renders node_features[0] (the bus). */
+  node_features: number[][];
+  /** One Quality per feature, parallel to feature_names. */
+  quality_mask: QualityFlag[];
+  observed_fraction: number;
+  /** "real" when data/ is present, "synthetic" when it fell back to .synthetic/. */
+  data_source: "real" | "synthetic";
+  generated_ms: number;
+}
+
+export async function assembleModule1(
+  island: string,
+  scenario: Module1Scenario,
+  timestamp?: string,
+): Promise<Module1AssembleResult> {
+  return postJson<Module1AssembleResult>(
+    "/api/module1/assemble",
+    { island, scenario, timestamp: timestamp ?? null },
+    (detail, status) => new Module1RunError(detail, status),
+  );
 }
 
 // Pairs each ProposedControlAction with its GatingDecision (and M2 input / M4 verdict
@@ -212,3 +321,93 @@ export function pairModule3Decisions(
   }
   return rows;
 }
+
+// Module 4: Deterministic Physics Verification & Grounded Causal Translation
+
+export interface ViolationDTO {
+  type:
+    | "VIOLATION_TYPE_UNSPECIFIED"
+    | "VIOLATION_TYPE_UNDERVOLTAGE"
+    | "VIOLATION_TYPE_OVERVOLTAGE"
+    | "VIOLATION_TYPE_THERMAL_OVERLOAD"
+    | "VIOLATION_TYPE_NON_CONVERGENCE"
+    | "VIOLATION_TYPE_MALFORMED_ACTION";
+  element_id: string;
+  limit: number;
+  measured: number;
+  margin_fraction: number;
+  attributed_component: string;
+}
+
+export interface CausalLogDTO {
+  action_id: string;
+  text: string;
+  grounded_entities: string[];
+  generator: string;
+}
+
+export interface GridBusState {
+  bus_name: string;
+  island: string;
+  voltage_pu: number;
+  status: "SAFE" | "UNDERVOLTAGE" | "OVERVOLTAGE";
+}
+
+export interface GridLineState {
+  line_name: string;
+  current_amps: number;
+  norm_amps: number;
+  margin_fraction: number;
+  is_closed: boolean;
+  status: "NORMAL" | "OVERLOAD" | "TRIPPED";
+}
+
+export interface Module4VerifyResult {
+  action_id: string;
+  decision: "DECISION_APPROVE" | "DECISION_REJECT";
+  solve_latency_ms: number;
+  violations: ViolationDTO[];
+  rejection_severity: number;
+  causal_log: CausalLogDTO;
+  buses: GridBusState[];
+  lines: GridLineState[];
+}
+
+export interface Module4Preset {
+  title: string;
+  description: string;
+  payload: {
+    action_id: string;
+    origin: "SYSTEM1" | "SYSTEM2";
+    rationale: string;
+    breakers: Array<{ edge_id: string; closed: boolean }>;
+    load_shed: Array<{ node_id: string; shed_fraction: number; priority_tier: number }>;
+    dispatch: Array<{ node_id: string; p_kw: number; q_kvar: number }>;
+  };
+}
+
+export class Module4RunError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message);
+    this.name = "Module4RunError";
+  }
+}
+
+export async function fetchModule4Presets(): Promise<Record<string, Module4Preset>> {
+  const res = await fetch("/api/module4/presets");
+  if (!res.ok) {
+    throw new Module4RunError(`Failed to fetch presets (HTTP ${res.status})`, res.status);
+  }
+  return (await res.json()) as Record<string, Module4Preset>;
+}
+
+export async function runModule4Verify(
+  payload: Module4Preset["payload"],
+): Promise<Module4VerifyResult> {
+  return postJson<Module4VerifyResult>(
+    "/api/module4/verify",
+    payload,
+    (detail, status) => new Module4RunError(detail, status),
+  );
+}
+

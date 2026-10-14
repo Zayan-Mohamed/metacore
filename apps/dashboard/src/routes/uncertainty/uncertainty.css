@@ -1,0 +1,368 @@
+/**
+ * Module 2 page — component styles only.
+ * Colour tokens come from src/styles/tokens.css (:root), imported in main.tsx.
+ * Conventions (card, KPI grid, bar track/fill, button) mirror routes/gating/gating.css.
+ */
+.uncertainty {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+}
+
+.uncertainty * {
+  box-sizing: border-box;
+}
+
+.uncertainty .mono {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.uncertainty__inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 36px 40px 64px;
+}
+
+/* header */
+.uncertainty__header {
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.uncertainty__title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+.uncertainty__mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--blue);
+  flex-shrink: 0;
+}
+.uncertainty h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.uncertainty__badge {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+.uncertainty__subtitle {
+  margin: 7px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 70ch;
+}
+
+/* card */
+.uncertainty__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 22px;
+  margin-top: 20px;
+}
+.uncertainty__card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.uncertainty__card-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* controls */
+.uncertainty__scenarios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+.uncertainty__btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bg);
+  background: var(--amber);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+.uncertainty__btn--ghost {
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.uncertainty__sliders {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  margin-top: 22px;
+}
+.uncertainty__field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.uncertainty__field-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.uncertainty__field-num {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.uncertainty__field input[type="range"] {
+  width: 100%;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+.uncertainty__field-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* KPI row — five metrics, so five columns rather than gating's four */
+.uncertainty__kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 20px;
+}
+.uncertainty__kpi {
+  margin-top: 0;
+}
+.uncertainty__kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.uncertainty__kpi-value {
+  font-size: 26px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+.uncertainty__kpi-note {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* verdict: ring gauge + trigger */
+.uncertainty__verdict {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+.uncertainty__gauge {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  flex-shrink: 0;
+}
+.uncertainty__gauge-centre {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+.uncertainty__gauge-value {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+}
+.uncertainty__gauge-caption {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.uncertainty__verdict-body {
+  flex: 1 1 340px;
+  min-width: 0;
+}
+.uncertainty__pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 4px 10px;
+  border-radius: 5px;
+}
+.uncertainty__reason {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-top: 14px;
+}
+.uncertainty__reason-key {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.uncertainty__reason-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.uncertainty__reason-copy {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 70ch;
+}
+.uncertainty__reason-copy--dim {
+  color: var(--text-dim);
+}
+
+/* pipeline strip */
+.uncertainty__pipeline {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 18px;
+}
+.uncertainty__pipe-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.uncertainty__chip {
+  position: relative;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 13px;
+  min-width: 118px;
+}
+.uncertainty__chip--learned {
+  border: 2px solid var(--blue);
+  background: var(--blue-soft);
+}
+.uncertainty__chip-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+.uncertainty__chip-note {
+  margin-top: 3px;
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+.uncertainty__chip-tag {
+  display: inline-block;
+  margin-top: 7px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.uncertainty__pipe-arrow {
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+/* baseline bars */
+.uncertainty__bars {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.uncertainty__bar-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.uncertainty__bar-label {
+  width: 116px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.uncertainty__bar-track {
+  flex-grow: 1;
+  position: relative;
+  height: 22px;
+  background: var(--surface-2);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.uncertainty__bar-fill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  border-radius: 3px;
+}
+.uncertainty__bar-value {
+  width: 58px;
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 600;
+}
+.uncertainty__caption {
+  margin: 16px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  max-width: 78ch;
+}
+
+@media (max-width: 1000px) {
+  .uncertainty__kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .uncertainty__sliders {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .uncertainty__inner {
+    padding: 28px 20px 48px;
+  }
+}

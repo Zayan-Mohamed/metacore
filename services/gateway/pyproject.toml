@@ -8,7 +8,13 @@ dependencies = [
   "pydantic>=2.9",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.31",
+  "metacore-module4-verification",
+  "metacore-module4-translation",
 ]
+
+[tool.uv.sources]
+metacore-module4-verification = { workspace = true }
+metacore-module4-translation = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

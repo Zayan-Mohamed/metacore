@@ -1,0 +1,76 @@
+Clear
+
+! MetaCore Canonical Multi-Hazard Islanded Microgrid Model (Delft 3-Island Benchmark)
+! Nominal Base: 11 kV line-to-line, 3-phase, 50 Hz
+
+Set DefaultBaseFrequency=50
+
+! -------------------------------------------------------------
+! Slack Source (Island 1 Grid Reference)
+! -------------------------------------------------------------
+New Circuit.Delft3Island BasekV=11.0 phases=3 bus1=SourceBus MVAsc3=100 MVAsc1=80
+
+! -------------------------------------------------------------
+! Medium Voltage Line Codes
+! -------------------------------------------------------------
+New LineCode.UndergroundCable nphases=3 R1=0.25 X1=0.12 R0=0.6 X0=0.35 Units=km
+New LineCode.SubseaTieLine    nphases=3 R1=0.18 X1=0.09 R0=0.45 X0=0.25 Units=km
+New LineCode.OverheadFeeder   nphases=3 R1=0.45 X1=0.28 R0=1.10 X0=0.65 Units=km
+
+! -------------------------------------------------------------
+! Island 1 (Nainativu Node Cluster: N1, N2, N3)
+! -------------------------------------------------------------
+New Line.Line_Source_N1 Bus1=SourceBus Bus2=N1 LineCode=UndergroundCable Length=0.5 NormAmps=300
+New Line.Line_N1_N2     Bus1=N1        Bus2=N2 LineCode=UndergroundCable Length=1.2 NormAmps=250
+New Line.Line_N1_N3     Bus1=N1        Bus2=N3 LineCode=UndergroundCable Length=0.8 NormAmps=200
+
+New Generator.Gen_Diesel_1 Bus1=N1 kV=11.0 kW=500.0 kvar=100.0 PF=0.95 Model=1 Vpu=1.00
+New Generator.Gen_PV_1     Bus1=N2 kV=11.0 kW=200.0 kvar=0.0   PF=1.00 Model=1 Vpu=1.00
+
+New Load.Load_N1_Pri    Bus1=N1 kV=11.0 kW=150.0 kvar=30.0  Vminpu=0.85 Vmaxpu=1.15 Model=1
+New Load.Load_N2_NonPri Bus1=N2 kV=11.0 kW=120.0 kvar=25.0  Vminpu=0.85 Vmaxpu=1.15 Model=1
+New Load.Load_N3_Pri    Bus1=N3 kV=11.0 kW=100.0 kvar=20.0  Vminpu=0.85 Vmaxpu=1.15 Model=1
+
+! -------------------------------------------------------------
+! Island 2 (Analaitivu Node Cluster: N4, N5, N6)
+! -------------------------------------------------------------
+New Line.Line_N4_N5     Bus1=N4        Bus2=N5 LineCode=UndergroundCable Length=1.0 NormAmps=200
+New Line.Line_N4_N6     Bus1=N4        Bus2=N6 LineCode=UndergroundCable Length=0.7 NormAmps=180
+
+New Generator.Gen_Diesel_2 Bus1=N4 kV=11.0 kW=300.0 kvar=50.0  PF=0.95 Model=1 Vpu=1.00
+New Generator.Gen_PV_2     Bus1=N5 kV=11.0 kW=150.0 kvar=0.0   PF=1.00 Model=1 Vpu=1.00
+
+New Load.Load_N4_Pri    Bus1=N4 kV=11.0 kW=100.0 kvar=20.0  Vminpu=0.85 Vmaxpu=1.15 Model=1
+New Load.Load_N5_NonPri Bus1=N5 kV=11.0 kW=80.0  kvar=15.0  Vminpu=0.85 Vmaxpu=1.15 Model=1
+New Load.Load_N6        Bus1=N6 kV=11.0 kW=60.0  kvar=10.0  Vminpu=0.85 Vmaxpu=1.15 Model=1
+
+! -------------------------------------------------------------
+! Island 3 (Delft/Eluvaitivu Node Cluster: N8, N9, N11, N12)
+! -------------------------------------------------------------
+New Line.Line_N8_N9     Bus1=N8        Bus2=N9  LineCode=UndergroundCable Length=1.1 NormAmps=150
+New Line.Line_N8_N11    Bus1=N8        Bus2=N11 LineCode=OverheadFeeder   Length=2.0 NormAmps=100
+New Line.Line_N8_N12    Bus1=N8        Bus2=N12 LineCode=OverheadFeeder   Length=2.5 NormAmps=100
+
+New Generator.Gen_Diesel_3 Bus1=N8 kV=11.0 kW=400.0 kvar=80.0  PF=0.95 Model=1 Vpu=1.00
+New Generator.Gen_BESS_3   Bus1=N9 kV=11.0 kW=200.0 kvar=20.0  PF=0.98 Model=1 Vpu=1.00
+
+New Load.Load_N8        Bus1=N8  kV=11.0 kW=120.0 kvar=25.0 Vminpu=0.85 Vmaxpu=1.15 Model=1
+New Load.Load_N9        Bus1=N9  kV=11.0 kW=100.0 kvar=20.0 Vminpu=0.85 Vmaxpu=1.15 Model=1
+New Load.Load_N11       Bus1=N11 kV=11.0 kW=80.0  kvar=15.0 Vminpu=0.85 Vmaxpu=1.15 Model=1
+New Load.Load_N12       Bus1=N12 kV=11.0 kW=90.0  kvar=18.0 Vminpu=0.85 Vmaxpu=1.15 Model=1
+
+! -------------------------------------------------------------
+! Inter-Island Subsea Tie-Lines and Switchable Breakers
+! -------------------------------------------------------------
+New Line.Line_1_2       Bus1=N2        Bus2=N4  LineCode=SubseaTieLine    Length=3.5 NormAmps=150 Enabled=True
+New Line.Line_2_3       Bus1=N5        Bus2=N8  LineCode=SubseaTieLine    Length=4.2 NormAmps=150 Enabled=True
+New Line.E_crit_1       Bus1=N1        Bus2=N8  LineCode=SubseaTieLine    Length=5.0 NormAmps=200 Enabled=True
+
+! -------------------------------------------------------------
+! Voltage Bases & Initial Solve Setup
+! -------------------------------------------------------------
+Set VoltageBases = [11.0]
+CalcVoltageBases
+Set ControlMode = Static
+Set MaxIterations = 100
+Set Tolerance = 0.0001

@@ -1,22 +1,5 @@
+/* Colour tokens now live in src/styles/tokens.css (:root), imported from main.tsx. */
 .gating {
-  --bg: oklch(15% 0.014 260);
-  --surface: oklch(20% 0.016 260);
-  --surface-2: oklch(24% 0.018 260);
-  --border: oklch(30% 0.02 260);
-  --text: oklch(94% 0.01 260);
-  --text-muted: oklch(68% 0.014 260);
-  --text-dim: oklch(50% 0.014 260);
-  --blue: oklch(72% 0.15 230);
-  --blue-soft: oklch(72% 0.15 230 / 0.16);
-  --amber: oklch(78% 0.15 75);
-  --amber-soft: oklch(78% 0.15 75 / 0.16);
-  --green: oklch(75% 0.15 150);
-  --green-soft: oklch(75% 0.15 150 / 0.14);
-  --red: oklch(68% 0.18 25);
-  --red-soft: oklch(68% 0.18 25 / 0.14);
-  --violet: oklch(62% 0.05 300);
-  --violet-soft: oklch(62% 0.05 300 / 0.18);
-
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
