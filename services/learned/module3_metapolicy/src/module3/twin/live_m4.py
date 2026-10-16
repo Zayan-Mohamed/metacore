@@ -106,6 +106,12 @@ class LiveM4Twin:
             ) from exc
 
     def evaluate(self, action: dict, disturbance: Disturbance) -> TwinOutcome:
+        if disturbance.grid_lost:
+            raise NotImplementedError(
+                "The real M4 cannot represent a lost main supply (stiff slack source, finding F3): "
+                "tripping Line_Source_N1 collapses every bus. Ask M4 for a grid-lost scenario "
+                "(see the M4 change request in docs/module3.md) or evaluate with p_grid_loss=0."
+            )
         self._n += 1
         payload = merge_with_overlay(action, disturbance, f"m3-live-{self._n:07d}")
         resp = self._post(payload)

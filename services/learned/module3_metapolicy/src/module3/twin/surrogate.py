@@ -20,6 +20,15 @@ What it does NOT model (be honest in the paper):
     diesel loss never causes a violation in the real twin either. Those disturbances are
     carried in the scenario and the gate's observation, not in the verdict.
 
+ISLANDED MODE (`Disturbance.grid_lost = True`) -- NOT in the real M4 yet.
+  When the main supply is lost, every group of buses still joined by working lines must run on
+  its own generators. A group COLLAPSES (all its buses read as violations, nothing is served) if
+  its demand exceeds the generation it has: PV x pv_factor, diesel x diesel_factor, battery at
+  rating. This is the shortage the proper System 2 has to plan around. Because the real M4
+  cannot represent it (stiff source; finding F3), this part is an M3-side ASSUMPTION and is
+  never validated by `validate_surrogate.py`. It is replaced once M4 grows a grid-lost scenario
+  (see the M4 change request in docs/module3.md).
+
 It is validated, not trusted: `scripts/validate_surrogate.py` replays random scenarios
 against the live M4 and reports the agreement rate.
 """
@@ -62,6 +71,53 @@ def energized_buses(tripped: frozenset[str], extra_open: frozenset[str] = frozen
     return seen
 
 
+def connected_groups(
+    tripped: frozenset[str],
+    extra_open: frozenset[str] = frozenset(),
+    grid_lost: bool = False,
+) -> list[set[str]]:
+    """Groups of real buses still joined to each other by working lines.
+
+    With the main supply lost, the source bus is cut away, so each group has to stand alone.
+    """
+    adj: dict[str, list[str]] = defaultdict(list)
+    for ln in LINES:
+        if ln.name in tripped or ln.name in extra_open:
+            continue
+        if grid_lost and SOURCE_BUS in (ln.bus1, ln.bus2):
+            continue
+        adj[ln.bus1].append(ln.bus2)
+        adj[ln.bus2].append(ln.bus1)
+    seen: set[str] = set()
+    groups: list[set[str]] = []
+    for start in NODES:
+        if start in seen:
+            continue
+        comp, stack = set(), [start]
+        while stack:
+            cur = stack.pop()
+            if cur in comp:
+                continue
+            comp.add(cur)
+            stack.extend(n for n in adj[cur] if n not in comp)
+        seen |= comp
+        groups.append({n for n in comp if n in LOAD_KW})
+    return groups
+
+
+def unit_capacity_kw(node: str, pv_factor: float = 1.0, diesel_factor: float = 1.0) -> float:
+    """Power the generator at `node` can deliver right now (0 if the bus has none)."""
+    if node not in GENERATORS:
+        return 0.0
+    _name, kind, rated = GENERATORS[node]
+    factor = pv_factor if kind == "pv" else diesel_factor if kind == "diesel" else 1.0
+    return float(rated) * float(factor)
+
+
+def group_capacity_kw(group: set[str], pv_factor: float = 1.0, diesel_factor: float = 1.0) -> float:
+    return sum(unit_capacity_kw(n, pv_factor, diesel_factor) for n in group)
+
+
 class SurrogateTwin:
     """Microsecond-scale grid verdict. Implements the `Twin` protocol."""
 
@@ -98,6 +154,9 @@ class SurrogateTwin:
                 detail={"malformed": sorted(set(malformed))},
             )
 
+        if disturbance.grid_lost:
+            return self._evaluate_islanded(shed, opened, disturbance)
+
         live = energized_buses(disturbance.tripped_lines, opened)
 
         violating: list[str] = []
@@ -122,4 +181,31 @@ class SurrogateTwin:
             served_fraction=served,
             energized=frozenset(live),
             source="surrogate",
+        )
+
+    def _evaluate_islanded(self, shed, opened, d: Disturbance) -> TwinOutcome:
+        """Main supply lost: each group of buses survives only if its generation covers it."""
+        groups = connected_groups(d.tripped_lines, opened, grid_lost=True)
+        live: set[str] = set()
+        violating: list[str] = []
+        shortfall_kw: dict[str, float] = {}
+        for group in groups:
+            cap = group_capacity_kw(group, d.pv_factor, d.diesel_factor)
+            demand = sum(LOAD_KW[n] * (1.0 - shed.get(n, 0.0)) for n in group)
+            key = "+".join(sorted(group))
+            if cap > _EPS and demand <= cap + _EPS:
+                live |= group  # supply covers demand
+            elif cap <= _EPS and demand <= _EPS and not any(n in GENERATORS for n in group):
+                continue  # nothing connected, nothing to power: not part of the solved circuit
+            else:
+                violating.extend(sorted(group))  # blackout: no source, or demand exceeds supply
+                shortfall_kw[key] = demand - cap
+        served = priority_weighted_served(shed, live, self.tier_weights)
+        return TwinOutcome(
+            approved=not violating,
+            violating_buses=violating,
+            served_fraction=served,
+            energized=frozenset(live),
+            source="surrogate",
+            detail={"mode": "islanded", "shortfall_kw": shortfall_kw},
         )

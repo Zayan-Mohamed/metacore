@@ -8,8 +8,9 @@ Policies:
     always_s1      never deliberate
     always_s2      always request System 2 (budget forces S1 once it runs out)
     threshold      System 2 iff u > threshold_u        <- the 'why not just a threshold?' rule
-    breaker_rule   System 2 iff a tripped feeder is visible and the storm is >= elevated
-    oracle         System 2 iff a feeder is ACTUALLY tripped (cheats with ground truth;
+    breaker_rule   System 2 iff an outage is visible (a tripped feeder or a lost main supply)
+                   and the storm is >= elevated
+    oracle         System 2 iff an outage ACTUALLY exists (cheats with ground truth;
                    an upper-ish bound on what any gate that cannot see truth could reach)
     gate           the trained RecurrentGate (greedy), memory carried through the storm
 """
@@ -34,7 +35,7 @@ def _baseline_action(name: str, obs: np.ndarray, truth_tripped: int, thr_u: floa
     if name == "threshold":
         return int(obs[0] > thr_u)
     if name == "breaker_rule":
-        return int(obs[12] > 0 and obs[8] >= 0.33)
+        return int((obs[12] > 0 or obs[14] > 0) and obs[8] >= 0.33)
     if name == "oracle":
         return int(truth_tripped > 0)
     raise KeyError(name)
@@ -74,7 +75,7 @@ def run_episode(
             action = _baseline_action(policy, obs, truth, thr_u)
         obs, r, _, done, info = env.step(action)
         prev_a, prev_r = info["effective_action"], float(r)
-        truth = info["n_tripped_truth"]
+        truth = info["n_tripped_truth"] + int(info["grid_lost_truth"])
         ret += r
         served += info["served_fraction"]
         delib += info["reward_parts"]["deliberation"]
@@ -87,7 +88,7 @@ def run_episode(
         by_stage[info["severity"]][1] += info["effective_action"]
         by_reason[info["trigger_reason"]][0] += 1
         by_reason[info["trigger_reason"]][1] += info["effective_action"]
-        key = "trip" if info["n_tripped_truth"] > 0 else "no_trip"
+        key = "trip" if (info["n_tripped_truth"] > 0 or info["grid_lost_truth"]) else "no_trip"
         by_damage[key][0] += 1
         by_damage[key][1] += info["effective_action"]
     return {

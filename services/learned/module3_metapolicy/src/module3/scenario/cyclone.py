@@ -52,6 +52,8 @@ class CycloneParams:
     comms_rate: float = 0.10  # per-step chance telemetry drops, at peak wind
     comms_len: tuple[int, int] = (3, 8)
     diesel_loss_prob: float = 0.15  # per severe step, chance a diesel unit is lost (permanent)
+    grid_loss_prob: float = 0.0  # chance the storm cuts the main supply (islanded operation)
+    grid_loss_len: tuple[int, int] = (12, 30)  # how many steps the supply stays lost
 
 
 # Placeholder parameter sets for the benchmark task — see module docstring.
@@ -75,6 +77,7 @@ def sample_params(rng: np.random.Generator, cfg: dict | None = None) -> CycloneP
         "trip_scale": 0.12,
         "comms_rate": 0.10,
         "diesel_loss_prob": 0.15,
+        "p_grid_loss": 0.0,
         **(cfg or {}),
     }
     lo, hi = c["peak_wind_kmh"]
@@ -87,6 +90,7 @@ def sample_params(rng: np.random.Generator, cfg: dict | None = None) -> CycloneP
         trip_scale=float(c["trip_scale"]),
         comms_rate=float(c["comms_rate"]),
         diesel_loss_prob=float(c["diesel_loss_prob"]),
+        grid_loss_prob=float(c["p_grid_loss"]),
     )
 
 
@@ -99,7 +103,9 @@ def resolve_params(spec, rng: np.random.Generator, cfg: dict | None = None) -> C
     if isinstance(spec, str):
         if spec not in PROFILES:
             raise KeyError(f"unknown cyclone profile {spec!r}; known: {sorted(PROFILES)}")
-        return PROFILES[spec]
+        prof = PROFILES[spec]
+        p_loss = float((cfg or {}).get("p_grid_loss", 0.0))
+        return replace(prof, grid_loss_prob=p_loss) if p_loss > 0 else prof
     raise TypeError(f"cannot resolve cyclone spec of type {type(spec).__name__}")
 
 
@@ -118,6 +124,7 @@ class CycloneEpisode:
     comms_up: np.ndarray  # (T,) bool
     onset_step: float
     top_at_risk: list[list[str]] = field(default_factory=list)
+    grid_lost: np.ndarray | None = None  # (T,) bool; None = never lost
 
     def disturbance(self, t: int) -> Disturbance:
         """Ground truth: what is physically wrong with the grid at step t."""
@@ -126,10 +133,14 @@ class CycloneEpisode:
             pv_factor=float(self.pv_factor[t]),
             diesel_factor=float(self.diesel_factor[t]),
             comms_up=bool(self.comms_up[t]),
+            grid_lost=self.truth_grid_lost(t),
         )
 
-    def known(self, t: int) -> tuple[frozenset[str], float, float]:
-        """What the controller can *see* at step t: (tripped lines, pv factor, diesel factor).
+    def truth_grid_lost(self, t: int) -> bool:
+        return bool(self.grid_lost[t]) if self.grid_lost is not None else False
+
+    def known(self, t: int) -> tuple[frozenset[str], float, float, bool]:
+        """What the controller can *see* at step t: (tripped lines, pv, diesel, grid_lost).
 
         With comms up it is the truth. With comms down it is the last value seen while comms
         were up — stale, and stale data is exactly what makes deliberation unable to help.
@@ -138,8 +149,13 @@ class CycloneEpisode:
         while s > 0 and not self.comms_up[s]:
             s -= 1
         if not self.comms_up[s]:  # comms down from the very first step: assume healthy grid
-            return frozenset(), 1.0, 1.0
-        return self.tripped[s], float(self.pv_factor[s]), float(self.diesel_factor[s])
+            return frozenset(), 1.0, 1.0, False
+        return (
+            self.tripped[s],
+            float(self.pv_factor[s]),
+            float(self.diesel_factor[s]),
+            self.truth_grid_lost(s),
+        )
 
     def context(self, t: int) -> dict:
         """The M1-style `SystemContext` for step t (same keys the older flat code uses)."""
@@ -230,6 +246,18 @@ def generate_episode(
         else:
             t += 1
 
+    # --- 5. main-supply loss: drawn LAST and only when enabled, so storms generated with
+    #        grid_loss_prob = 0 are bit-identical to those made before this event existed. ---
+    grid_lost = None
+    if params.grid_loss_prob > 0.0:
+        grid_lost = np.zeros(n_steps, dtype=bool)
+        if rng.random() < params.grid_loss_prob:
+            severe = [i for i, s in enumerate(stage) if s in ("severe", "extreme")]
+            if severe:
+                start = int(severe[int(rng.integers(0, len(severe)))])
+                lo, hi = params.grid_loss_len
+                grid_lost[start : start + int(rng.integers(lo, hi + 1))] = True
+
     onset = max(0.0, (params.peak_frac - 2.0 * params.width_frac) * n_steps)
     return CycloneEpisode(
         params=params,
@@ -243,6 +271,7 @@ def generate_episode(
         comms_up=comms,
         onset_step=onset,
         top_at_risk=top_at_risk,
+        grid_lost=grid_lost,
     )
 
 

@@ -26,12 +26,17 @@ class Disturbance:
         pv_factor:     0..1 multiplier on PV output (wind cut-out). 1 = unaffected.
         diesel_factor: 0..1 multiplier on diesel availability. 1 = fully available.
         comms_up:      False when telemetry is lost (M2 reports this as `sensing`).
+        grid_lost:     True when the main supply is gone and the islands must run on their
+                       own generators. NOT representable in the real M4 yet (see
+                       docs/module3.md F3 and the M4 change request); only the surrogate
+                       models it.
     """
 
     tripped_lines: frozenset[str] = frozenset()
     pv_factor: float = 1.0
     diesel_factor: float = 1.0
     comms_up: bool = True
+    grid_lost: bool = False
 
 
 @dataclass

@@ -194,9 +194,13 @@ def run(cfg: dict, out: Path, live_url: str | None, quick: bool, log=print) -> d
     if live_url:
         log(f"\n=== final test on real M4 at {live_url} (seed {seeds[0]} gate) ===")
         n_live = int(cfg["eval"]["live_episodes"])
-        sur = _evaluate_all(cfg, models0, seeds[0], None, n_live, n_live)
+        # The real M4 cannot represent a lost main supply (finding F3), so the live test
+        # replays only storms WITHOUT grid loss; both twins see the same storms.
+        live_cfg = deepcopy(cfg)
+        live_cfg.setdefault("scenario", {})["p_grid_loss"] = 0.0
+        sur = _evaluate_all(live_cfg, models0, seeds[0], None, n_live, n_live)
         liv = _evaluate_all(
-            cfg,
+            live_cfg,
             models0,
             seeds[0],
             LiveM4Twin(live_url, tier_weights=cfg.get("tier_weights")),
@@ -243,6 +247,11 @@ def main() -> int:
     ap.add_argument("--seeds", type=int, nargs="*", help="override the seed list")
     ap.add_argument("--arch", choices=["gru", "mlp"], help="override policy.arch")
     ap.add_argument("--ablate-mlp", action="store_true", help="also train the memoryless ablation")
+    ap.add_argument(
+        "--p-grid-loss",
+        type=float,
+        help="share of storms that cut the main supply (islanded operation); default from config",
+    )
     ap.add_argument("--live-m4", default=None, help="gateway URL for the final real-M4 test")
     a = ap.parse_args()
     cfg = yaml.safe_load(Path(a.config).read_text(encoding="utf-8"))
@@ -250,6 +259,8 @@ def main() -> int:
         cfg = _quick(cfg)
     if a.seeds:
         cfg["eval"]["seeds"] = a.seeds
+    if a.p_grid_loss is not None:
+        cfg.setdefault("scenario", {})["p_grid_loss"] = a.p_grid_loss
     if a.arch:
         cfg["policy"]["arch"] = a.arch
     if a.ablate_mlp:

@@ -26,7 +26,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-OBS_DIM = 14
+OBS_DIM = 15
 BUDGET_SLOT = 10
 EXTRA_DIM = 4  # prev action one-hot (2) + prev reward (1) + trial_done (1)
 REWARD_SCALE = 2.0  # keeps the fed-back reward roughly in [-1, 1]

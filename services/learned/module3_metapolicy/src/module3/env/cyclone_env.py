@@ -37,7 +37,7 @@ from module3.twin.topology import OVERHEAD_LINES
 ensure_flat_on_path()
 from m2_stream import _by_reason, _jitter, load_jsonl  # noqa: E402  (flat helpers)
 
-OBS_DIM = 14
+OBS_DIM = 15
 
 # One row per observation slot. Slots 0-11 are identical in meaning/order to the older env,
 # so anything that reads u / reason / severity by index keeps working.
@@ -106,11 +106,17 @@ OBS_FIELDS = [
         "source": "SCADA",
         "meaning": "mean PV/diesel availability, last seen",
     },
+    {
+        "index": 14,
+        "name": "grid_lost_visible",
+        "source": "SCADA",
+        "meaning": "1 if the main supply is known to be lost (stale if comms down)",
+    },
 ]
 
 
 def describe_observation(obs) -> list[dict]:
-    """Attach names/sources to a 14-d observation (for the dashboard)."""
+    """Attach names/sources to a 15-d observation (for the dashboard)."""
     vec = [float(x) for x in obs]
     if len(vec) != OBS_DIM:
         raise ValueError(f"expected {OBS_DIM}-d observation, got {len(vec)}")
@@ -131,7 +137,7 @@ def _pick_reason(stage_idx: int, ood: bool, comms_up: bool, rng: np.random.Gener
 
 
 class CycloneGatingEnv(gym.Env):
-    """Gymnasium env: observation (14,) float32, action Discrete(2), episode = one cyclone."""
+    """Gymnasium env: observation (15,) float32, action Discrete(2), episode = one cyclone."""
 
     metadata = {"render_modes": []}
 
@@ -146,6 +152,7 @@ class CycloneGatingEnv(gym.Env):
         weights = {
             int(k): float(v) for k, v in (cfg.get("tier_weights") or DEFAULT_TIER_WEIGHTS).items()
         }
+        self._tier_weights = weights
         self.twin: Twin = twin if twin is not None else SurrogateTwin(weights)
         self._scenario_cfg = cfg.get("scenario") or {}
         self._rng = rng if rng is not None else np.random.default_rng(int(cfg.get("seed", 0)))
@@ -192,7 +199,7 @@ class CycloneGatingEnv(gym.Env):
     def _obs(self, t: int) -> np.ndarray:
         ep, m2 = self._episode, self._m2[t]
         ctx = ep.context(t)
-        known_tripped, pv_k, diesel_k = ep.known(t)
+        known_tripped, pv_k, diesel_k, grid_lost_k = ep.known(t)
         probs = list(m2["class_probabilities"])[: self.k]
         probs += [0.0] * (self.k - len(probs))
         reason = str(m2.get("trigger_reason", "none"))
@@ -215,6 +222,7 @@ class CycloneGatingEnv(gym.Env):
                 float(m2.get("observed_fraction", 1.0)),
                 tripped_visible,
                 0.5 * (pv_k + diesel_k),
+                1.0 if grid_lost_k else 0.0,
             ],
             dtype=np.float32,
         )
@@ -228,8 +236,15 @@ class CycloneGatingEnv(gym.Env):
         effective = 0 if exhausted else int(action)
 
         if effective == 1:
-            known_tripped, _, _ = ep.known(t)
-            proposed = deliberative_plan(known_tripped, ctx)
+            known_tripped, pv_k, diesel_k, grid_lost_k = ep.known(t)
+            proposed = deliberative_plan(
+                known_tripped,
+                ctx,
+                grid_lost=grid_lost_k,
+                pv_factor=pv_k,
+                diesel_factor=diesel_k,
+                tier_weights=self._tier_weights,
+            )
             self._budget -= 1.0
         else:
             proposed = reactive_plan(ctx, reason)
@@ -251,6 +266,7 @@ class CycloneGatingEnv(gym.Env):
             "epistemic_uncertainty": float(m2["epistemic_uncertainty"]),
             "observed_fraction": float(m2.get("observed_fraction", 1.0)),
             "n_tripped_truth": len(ep.tripped[t]),
+            "grid_lost_truth": ep.truth_grid_lost(t),
             "comms_up": bool(ep.comms_up[t]),
             "twin_source": outcome.source,
         }
