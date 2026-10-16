@@ -349,11 +349,16 @@ submission, and it will be stated clearly again at PP1.
 engine plus System 2 policy with metrics and a live demo. Task order is set in ClickUp; the
 Meta-RL pipeline is first.
 
-* **Meta-RL pipeline — BUILT, AWAITING REVIEW (2026-10-15).** PPO + GRU (RL²) gate, simulated
+* **System 2 (proper) — IN PROGRESS (started 2026-10-17), option C chosen.** Built: critical-load
+  ranking and a shortage-aware planner, plus an islanded (main-supply-lost) model in the
+  surrogate (§23). Waiting on: M4 to represent a lost main supply (change request, §24) so the
+  planner can be tested against the real firewall.
+* **Meta-RL pipeline — BUILT, READY FOR DEV REVIEW (2026-10-17).** Pushed on `m3/gate-policy`; no
+  PR opened; ClickUp has no "PR review by dev" status yet. PPO + GRU (RL²) gate, simulated
   cyclones with four disturbances, physical priority-weighted reward, surrogate-trained /
   live-M4-tested. Design: Part II (§14–§20). Results: §22. Open caveats: §21 (F1–F8).
   Not yet done under this task: the dashboard page to set cyclone parameters and test the gate
-  (planned), and the real System 2 (separate task; `deliberative_plan` is a minimal planner).
+  (planned). The proper System 2 is its own task — see §23.
 
 **Open work (Phases C–F), in rough dependency order**
 
@@ -449,7 +454,7 @@ Reference papers: [`module3-research.md`](module3-research.md).
   random CYCLONE  (scenario/cyclone.py)             M2 uncertainty stream (published mock)
   wind -> vulnerability, 4 disturbances                          |
         |                                                        |
-        +--------------> OBSERVATION (14-d) <--------------------+
+        +--------------> OBSERVATION (15-d) <--------------------+
                                |
                                v
                     RecurrentGate  (GRU memory, PPO-trained)
@@ -613,18 +618,19 @@ which lines are tripped** — that blindness is what System 2 fixes.
 ### 19.2 System 2 — the deliberative path
 | Function | File | Input → Output |
 |---|---|---|
-| `deliberative_plan(known_tripped, context)` | `control/planner.py` | set of lines believed tripped (stale if comms are down) → `{origin:"SYSTEM2", load_shed:[100% of every cut-off bus], breakers:[], dispatch:[], rationale}` |
+| `deliberative_plan(known_tripped, context, *, grid_lost, pv_factor, diesel_factor, tier_weights, reserve_margin)` | `control/planner.py` | the believed grid state (stale if comms are down) → `{origin:"SYSTEM2", load_shed:[…], dispatch:[…], breakers:[], rationale}`. Full algorithm in §23 |
+| `critical_load_ranking()`, `shed_priority_order(nodes)` | same | the ranked list of loads / the order they are given up |
+| `connected_groups`, `group_capacity_kw`, `unit_capacity_kw` | `twin/surrogate.py` | groups of buses joined by working lines; the generation a group has |
 | `energized_buses(tripped)` | `twin/surrogate.py` | tripped line names → set of buses still connected to the source (graph walk) |
 | `system2_action(obs_raw, rng)` | `system2.py` (flat, Week-7) | the old stand-in used by the dashboard: protects tier 1, closes `E_crit_1`, bumps `N4` dispatch |
 
-`deliberative_plan` is the *smallest planner that makes the physical reward meaningful*. It is
-**not** the final System 2 (separate ClickUp task: load-shed prioritisation / critical-load
-ranking). System 2 thinks about the grid (topology); System 1 only thinks about exposure.
+System 2 thinks about the grid (topology, supply, shortage); System 1 only thinks about exposure.
+The proper System 2 task is in progress — see §23.
 
 ### 19.3 The gate (the learned part)
 | Item | File | What it does |
 |---|---|---|
-| `RecurrentGate` | `policy/recurrent_gate.py` | GRU (or MLP) actor-critic. Input = 14-d obs + prev action + prev reward + trial-done flag (18-d). Output = 2 logits (S1/S2), a value, the memory. Masks S2 when the budget is 0. |
+| `RecurrentGate` | `policy/recurrent_gate.py` | GRU (or MLP) actor-critic. Input = 15-d obs + prev action + prev reward + trial-done flag (19-d). Output = 2 logits (S1/S2), a value, the memory. Masks S2 when the budget is 0. |
 | `build_inputs(obs, prev_action, prev_reward, trial_done)` | same | assembles the 18-d RL² input |
 | `collect_tasks(env, model, n_tasks, trials, rng)` | `train/ppo.py` | runs the gate through storms, records what PPO needs |
 | `compute_gae(rewards, values, γ, λ)` | same | advantages and return targets |
@@ -634,8 +640,8 @@ ranking). System 2 thinks about the grid (topology); System 1 only thinks about 
 ### 19.4 Environment, scenario, twin, reward
 | Item | File | Input → Output |
 |---|---|---|
-| `CycloneGatingEnv` (`reset`, `step`) | `env/cyclone_env.py` | `step(0/1)` → obs (14), reward, truncated, `info` (served, violations, reward parts, …) |
-| `describe_observation(obs)` | same | names/sources for each of the 14 slots |
+| `CycloneGatingEnv` (`reset`, `step`) | `env/cyclone_env.py` | `step(0/1)` → obs (15), reward, truncated, `info` (served, violations, reward parts, …) |
+| `describe_observation(obs)` | same | names/sources for each of the 15 slots |
 | `step_reward(outcome, used_s2, cfg)` | `env/reward.py` | twin outcome → `(reward, parts)` |
 | `generate_episode(params, n, rng)` | `scenario/cyclone.py` | storm parameters → `CycloneEpisode` (`.disturbance(t)`, `.known(t)`, `.context(t)`) |
 | `sample_params`, `resolve_params`, `PROFILES` | same | random storm / named profile |
@@ -653,10 +659,10 @@ ranking). System 2 thinks about the grid (topology); System 1 only thinks about 
 | `pipeline.yaml` | module root | every knob |
 | `_flat.py` | `src/module3/` | temporary bridge to the flat files (`system1.py`, `m2_stream.py`) |
 
-**The 14-d observation** (slots 0–11 identical to the toy env; 12–13 are new): `0 u · 1 reason_value ·
+**The 15-d observation** (slots 0–11 identical to the toy env; 12–14 are new): `0 u · 1 reason_value ·
 2 reason_sensing · 3 state_class · 4–6 class_prob · 7 max_node_vulnerability · 8 severity ·
 9 time_to_hazard · 10 budget_remaining · 11 observed_fraction · 12 tripped_visible (share of
-overhead feeders known tripped) · 13 gen_available_visible`. Slots 12–13 come from breaker/SCADA
+overhead feeders known tripped) · 13 gen_available_visible · 14 grid_lost_visible`. Slots 12–14 come from breaker/SCADA
 status and freeze at their last value when telemetry is lost.
 
 ### 19.6 The baselines (what the gate must beat)
@@ -754,3 +760,155 @@ Per-seed return on fresh storms (the spread is the story):
    modest, so "do nothing" is a deep local optimum. Try a larger `w_viol` and re-check.
 3. **Longer horizon / `trials_per_task` > 1** to give the GRU something to adapt over.
 4. **Re-run with ≥ 10 seeds** once stable, and report confidence intervals.
+
+---
+
+# Part III — System 2 (proper) and the lost-supply scenario
+
+Added 2026-10-17 for the ClickUp task *"Develop System 2 deliberative survival policy properly
+(load-shed prioritisation, critical-load ranking) replacing Week-7 heuristic"*. Decision taken
+with Saabir: **option C** — build the shortage model on the M3 side now (B), and ask M4 for a real
+lost-supply scenario (A) so it can be verified later.
+
+## 23. System 2 — critical-load ranking and shortage-aware shedding
+
+### 23.1 The idea in plain words
+Picture a cyclone cutting the main power connection. The three islands must run on their own
+diesel, battery and solar. If the islands *need* more power than their generators can *make*, the
+grid blacks out — unless someone switches off enough load first. System 2's job is to decide **who
+gets switched off, in what order, and how much**, so the lights stay on where it matters most and
+the blackout is avoided.
+
+System 1 cannot do this: it only looks at "how exposed is each node?" and sheds in proportion.
+It does not know the supply is gone or how much generation is left. That blindness is exactly what
+deliberation pays for.
+
+### 23.2 The ranking (who is given up first)
+Code: `control/planner.py::shed_priority_order`, `critical_load_ranking`.
+
+Loads are given up in this order: **lowest priority tier first; inside a tier, the largest load
+first** (so fewer buses are touched); **tier 1 only as a last resort**, when every other load in
+the group is already off. With the default weights (3/2/1):
+
+| Give-up order | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Node | N8 | N9 | N12 | N11 | N4 | N5 | N6 | N1 | N2 | N3 |
+| Tier | 3 | 3 | 3 | 3 | 2 | 2 | 2 | 1 | 1 | 1 |
+| Load (kW) | 120 | 100 | 90 | 80 | 100 | 80 | 60 | 150 | 120 | 100 |
+
+> ⚠ **Inside a tier the order is only a size tie-break, not a judgement of criticality.** For
+> example N3 comes out "most critical" of the three tier-1 nodes purely because it is the smallest.
+> A genuine critical-load ranking (hospital, water pumping, …) needs operator input — finding F4.
+> Until then, the tiers carry the meaning and the in-tier order should not be quoted.
+
+### 23.3 The algorithm (six steps)
+1. **Groups.** Split the buses into groups still joined by working lines. With the main supply
+   lost, each group must stand on its own generators.
+2. **Supply.** Capacity of a group = PV × `pv_factor` + diesel × `diesel_factor` + battery.
+   (While the main supply is up, a group joined to it has unlimited supply; a group cut off from
+   it is dead and is shed entirely — the Part II behaviour.)
+3. **Shortfall.** `excess = demand − capacity × (1 − reserve_margin)`. The 5% reserve margin is
+   deliberate headroom so one further small loss does not cause a blackout.
+4. **Rank** the loads as in §23.2.
+5. **Shed.** Walk down the ranking, shedding each load fully until the excess is covered; the last
+   one may be partly shed. Shed fractions are rounded **up**, never down.
+6. **Dispatch.** Ask the dispatchable units (diesel, battery) to cover what PV does not.
+
+**Worked example.** Main supply lost, PV dead (0%), diesel at half. Demand 1000 kW; capacity
+= 600 (diesel) + 200 (battery) = 800 kW. With the 5% margin the target is 760 kW, so 240 kW must
+go: N8 (120) + N9 (100) fully, then 20 kW of N12 (22.2%). All of tier 1 and 2 are untouched and
+the twin approves the plan (served 88% of the priority-weighted load). Doing nothing (System 1's
+effective behaviour) leaves a 200 kW shortfall and the whole system blacks out.
+
+### 23.4 How a shortage is judged (and why it is an assumption)
+`twin/surrogate.py::_evaluate_islanded`: a group survives only if its generation covers its
+remaining demand; otherwise **every bus in the group reads as a violation and nothing is served**
+(underfrequency collapse). The new disturbance `grid_lost` (opt-in: `scenario.p_grid_loss`, or
+`--p-grid-loss`) starts during a severe step and lasts 12–30 steps. The gate sees it through new
+observation slot 14, `grid_lost_visible` (stale if telemetry is down).
+
+> ⚠ The real M4 cannot represent this (finding F3), so the islanded model is **not validated by
+> `validate_surrogate.py`** and `LiveM4Twin` refuses to evaluate it (raises `NotImplementedError`).
+> Live-M4 tests therefore run only on storms **without** grid loss. Closing that gap is the M4
+> change request in §24.
+
+### 23.5 What this System 2 does not do (yet)
+* **Greedy, not optimal.** It is a rule-based ranking, not an optimiser; a knapsack/MILP over
+  shed fractions could serve more priority-weighted load for the same shortfall.
+* No battery state-of-charge, ramp limits, frequency dynamics or time horizon — the shortage is
+  judged instant by instant.
+* The reserve margin is a fixed 5%, not learned or tuned.
+* No tie-line reconfiguration (breakers are never re-closed; storm-damaged lines stay out).
+* Dispatch commands are within unit ratings but are **not** checked by any firewall.
+* Its input is the *believed* state: under a data blackout it plans on stale information and can
+  be wrong (this is deliberate and tested).
+
+### 23.6 Results in the shortage world
+Run (2026-10-17): `python -m module3.train.pipeline --p-grid-loss 0.6`, 5 seeds, 60% of storms cut
+the main supply, 18.5 min. Surrogate twin only (the real M4 cannot represent a lost supply, §23.4),
+so **none of this is verified by M4**. Return per storm, mean ± std across seeds, identical storms
+for every policy:
+
+| policy | fresh random storms | held-out `ditwah_like` | held-out `burevi_like` |
+|---|---|---|---|
+| always S1 | 61.19 ± 0.86 | 54.05 ± 3.89 | 64.24 ± 4.53 |
+| always S2 | 62.94 ± 0.85 | 54.33 ± 1.54 | 66.84 ± 1.34 |
+| threshold (`u > 0.40`) | 65.28 ± 1.40 | 63.72 ± 0.84 | 66.11 ± 3.50 |
+| outage rule (S2 if an outage is visible) | **71.02 ± 1.21** | **65.14 ± 0.96** | **73.00 ± 0.33** |
+| oracle (cheats, ceiling) | 73.49 ± 0.85 | 71.17 ± 0.58 | 74.11 ± 0.56 |
+| **gate (GRU, PPO)** | 69.31 ± 5.48 | 64.86 ± 9.49 | 70.51 ± 3.56 |
+
+| seed | 0 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| gate, fresh storms | **73.82** | 64.37 | **73.33** | 62.39 | **72.65** |
+| outage rule | 71.41 | 72.49 | 70.71 | 69.18 | 71.33 |
+| gate, `ditwah_like` | **71.10** | 53.32 | **71.86** | 55.69 | **72.31** |
+| outage rule, `ditwah_like` | 64.50 | 64.01 | 65.31 | 65.32 | 66.54 |
+
+**Reading.**
+* **Shortage makes deliberation matter more.** Always-S1 falls from 68.98 (Part II world) to 61.19
+  and the oracle-vs-S1 gap widens from about 6 to 12 points, as expected when a blackout is
+  possible. The planner is doing the work: with the right trigger it recovers most of that gap.
+* **3 of 5 seeds (0, 2, 4) beat the outage rule on fresh storms and on `ditwah_like`** (by 1–2
+  points on fresh storms and 6–7 on `ditwah_like`). **Seeds 1 and 3 failed to learn** (62–64, close
+  to always-S1). That is better than Part II (2 of 5) but the instability is not fixed, so the
+  seed-mean (69.31) still trails the rule (71.02). Quote the distribution over seeds, not the best.
+* **The gate over-escalates:** it uses System 2 on 47% of steps (rule 18%, oracle 34%) and 38% of
+  steps where the grid is intact (rule 0%). It buys safety with budget; a better-tuned reward or
+  training schedule should cut this.
+* **Not shown:** whether the GRU beats a memoryless net (no ablation was run here), and any
+  real-M4 result (impossible until §24 is done).
+
+## 24. DRAFT change request to M4 — a "main supply lost" scenario  *(not sent)*
+
+**To:** Hariswara (M4) · **From:** Saabir (M3) · **Status:** draft, for Saabir to review and send.
+
+**Why.** M3's System 2 must decide which loads to shed when local generation cannot cover demand.
+The current twin cannot tell a good shed plan from a bad one: the source has a 100 MVA
+short-circuit rating, so any shortfall is covered and M4 approves every plan. Tripping
+`Line_Source_N1` does not help either — every bus then reads 0 pu because nothing in the circuit is
+grid-forming. (Probes and reproduction: `docs/module3.md` §21, F3.)
+
+**Ask (minimal).**
+1. A way to run the model **without the main source** while the local units form the grid:
+   either a grid-forming mode for the diesel/battery units (for example a `Vsource`-equivalent or
+   isochronous generator on one unit per island) or a second `.dss` model for the islanded case.
+2. Real **generation limits** in that mode: PV output scaled by a factor, diesel available only up
+   to a factor of rating, battery at rating. An island whose demand exceeds its generation should
+   fail verification (non-convergence or under-voltage) instead of being absorbed.
+3. A **scenario field** on `POST /api/module4/verify` — `{tripped_lines: [...], grid_lost: bool,
+   pv_factor, diesel_factor}` — so M3 stops encoding storm damage as fake breaker/dispatch commands.
+
+**Acceptance tests (M3 will run these).**
+* Grid lost, PV 0, diesel 0.5, **no shedding** → REJECT (shortfall ≈ 200 kW).
+* Same, shedding N8 and N9 fully and ~22% of N12 → APPROVE.
+* Grid lost, plentiful supply, no shedding → APPROVE.
+* An island with no generator → REJECT unless fully shed and floating.
+
+**How M3 will use it.** `LiveM4Twin` stops raising on `grid_lost`; the final live test then
+covers the shortage storms, and the surrogate's islanded model is validated against it with
+`scripts/validate_surrogate.py`.
+
+**Related small fixes found on the way (separate, lower priority).** F2 — `set_load_shed("N1")`
+also sheds N11 and N12 (substring match); F2b — some multi-trip states are approved although a bus
+with load is dead; F5 — `verify()` recompiles the circuit each call (~13 ms; the solve is ~0.2 ms).
