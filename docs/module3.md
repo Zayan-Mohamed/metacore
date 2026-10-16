@@ -353,6 +353,8 @@ Meta-RL pipeline is first.
   ranking and a shortage-aware planner, plus an islanded (main-supply-lost) model in the
   surrogate (§23). Waiting on: M4 to represent a lost main supply (change request, §24) so the
   planner can be tested against the real firewall.
+* **Training stability — FIXED (2026-10-17, §25).** Standardising the critic's target made all 5
+  seeds beat the rule in both worlds. Open caveat: the GRU's memory is not shown to help (§25.6).
 * **Meta-RL pipeline — BUILT, READY FOR DEV REVIEW (2026-10-17).** Pushed on `m3/gate-policy`; no
   PR opened; ClickUp has no "PR review by dev" status yet. PPO + GRU (RL²) gate, simulated
   cyclones with four disturbances, physical priority-weighted reward, surrogate-trained /
@@ -706,7 +708,7 @@ are given so the owner can confirm. **F2 and F3 are for Hariswara (M4).**
 (tripped lines, PV/diesel factors) so M3 stops encoding storm damage as fake breaker/dispatch
 commands. Needs Hariswara's agreement before any change.
 
-## 22. Results — first full run (2026-10-15)
+## 22. Results — first full run (2026-10-15)  *(superseded by §25.6 — produced before the stability fix)*
 
 Run: `python -m module3.train.pipeline --ablate-mlp --live-m4 http://127.0.0.1:8000`; 5 seeds,
 120 PPO updates × 16 storms each, 39 min wall clock. Per-storm return over 80 steps, higher is
@@ -737,9 +739,11 @@ Per-seed return on fresh storms (the spread is the story):
   on held-out `ditwah_like`), and in 2 of 5 seeds (0, 1) it beats *every* non-cheating baseline and
   gets close to the oracle (74.6 vs 75.0).
 * **It is NOT yet reliably better than a simple breaker-status rule.** Averaged over seeds the gate
-  (70.93) trails the rule (72.26), because **PPO training is unstable across seeds**: seeds 2 and 3
-  never left the "always System 1" behaviour (≈ 67–68, the always-S1 level). Any paper claim must
-  be made on the distribution over seeds, not on seed 0.
+  (70.93) trails the rule (72.26), because **PPO training is unstable across seeds**: two seeds
+  collapsed into a fixed habit — seed 2 to *never* escalate (S2 rate 0.00) and seed 3 to *always*
+  escalate (S2 rate 0.56, the budget cap; entropy 0.04). *(Correction, 2026-10-17: an earlier
+  version of this note said both seeds stayed on System 1; the training logs show seed 3 did the
+  opposite.)* Any paper claim must be made on the distribution over seeds, not on seed 0.
 * **GRU vs MLP is not distinguishable** at this sample size (70.9 vs 70.5; ranges overlap). Do not
   claim memory helps until a longer or tuned run separates them. `ditwah_like` leans GRU
   (68.3 vs 66.9) but the std is ~4.
@@ -843,7 +847,7 @@ observation slot 14, `grid_lost_visible` (stale if telemetry is down).
 * Its input is the *believed* state: under a data blackout it plans on stale information and can
   be wrong (this is deliberate and tested).
 
-### 23.6 Results in the shortage world
+### 23.6 Results in the shortage world  *(superseded by §25.6 — produced before the stability fix)*
 Run (2026-10-17): `python -m module3.train.pipeline --p-grid-loss 0.6`, 5 seeds, 60% of storms cut
 the main supply, 18.5 min. Surrogate twin only (the real M4 cannot represent a lost supply, §23.4),
 so **none of this is verified by M4**. Return per storm, mean ± std across seeds, identical storms
@@ -912,3 +916,120 @@ covers the shortage storms, and the surrogate's islanded model is validated agai
 **Related small fixes found on the way (separate, lower priority).** F2 — `set_load_shed("N1")`
 also sheds N11 and N12 (substring match); F2b — some multi-trip states are approved although a bus
 with load is dead; F5 — `verify()` recompiles the circuit each call (~13 ms; the solve is ~0.2 ms).
+
+---
+
+# Part IV — Training stability
+
+## 25. Why some seeds failed, and the fix (2026-10-17)
+
+### 25.1 What was going wrong
+Across seeds the same code gave very different gates (e.g. 62 to 74 return per storm). The
+training logs showed the failing seeds did **not** just learn slowly — they **collapsed into a
+fixed habit**: the policy's randomness (its *entropy*) fell to ~0 and it settled on one behaviour
+for every step — *always* System 2 (S2 rate pinned at the 0.56 budget cap) or *never* System 2
+(S2 rate 0.00). After that PPO had nothing left to learn from, because a policy that never varies
+produces no useful comparison between choices.
+
+> Correction: an earlier version of §22 said the failed seeds of the first run "never left System
+> 1". Seed 2 did, but seed 3 collapsed the other way (always System 2). The training logs, not the
+> evaluation scores, are what show this.
+
+### 25.2 The cause we found
+The **critic** (the network part that predicts "how much reward is still to come") has to output
+numbers around 50–70, because an 80-step storm adds up to that much reward. Its error is therefore
+huge compared with the policy's learning signal, and both share the same network and the same
+gradient clip (0.5). The critic's loss swamped the policy's, so the policy barely moved while the
+critic caught up and then drifted into a fixed habit.
+
+### 25.3 The fix: standardise the critic's target
+`ppo.value_norm: true` (code: `train/ppo.py::ppo_update`, `policy/recurrent_gate.py::to_return_units`).
+The critic is trained to predict `(return − mean) / std` of the returns seen in the first batch, so
+its loss has unit scale and no longer drowns the policy. Rollouts convert its output back to real
+reward units before computing advantages. The mean/std are stored with the weights.
+
+### 25.4 How we chose it (a controlled sweep)
+`scripts/stability_sweep.py` trains each recipe on 5 seeds and scores it on **validation storms that
+are disjoint from the final-report storms**, so picking a recipe does not leak into the reported
+numbers. Shortage world (`p_grid_loss = 0.6`), return per storm:
+
+| recipe | mean ± std | worst seed | seeds beating the visible-outage rule | `ditwah_like` | train time / job |
+|---|---|---|---|---|---|
+| A — previous setup | 69.20 ± 6.47 | 60.7 | 3 / 5 | 65.7 | 431 s |
+| **B — standardised critic** | **73.48 ± 1.34** | **71.4** | **5 / 5** | **72.3** | 436 s |
+| C — B + lr 3e-4, batch 32, entropy 0.02→0.002, KL stop, critic warm-up | 73.40 ± 1.30 | 71.3 | 5 / 5 | 71.8 | 993 s |
+| D — C + warm start (copy the rule first) | 73.45 ± 1.30 | 71.4 | 5 / 5 | 71.8 | 1008 s |
+| *warm start alone (no PPO)* | *65.31 ± 3.33* | *61.0* | – | *59.9* | – |
+
+Same storms for reference: always-S1 61.15 · `u`-threshold 66.00 · visible-outage rule 71.32 ·
+oracle 73.68.
+
+* **B alone fixes it.** Seed-to-seed spread falls ~5× and every seed beats the rule.
+* **C and D add nothing** over B and cost 2.3× the compute, so **B is the default**. The other
+  switches stay in the code (all off by default) in case a harder setting needs them.
+* **The warm start is not a crutch.** Copying the rule alone scores 65.3 — far below the trained
+  gate — and warm-starting does not change the final score, so what the gate learned came from PPO.
+* The oracle is not a strict ceiling: it only escalates when it sees damage, so a gate that
+  anticipates can edge past it (73.48 vs 73.68 here, 72.3 vs 72.1 on `ditwah_like`).
+
+### 25.5 Caveats
+* 5 seeds and 40 validation storms per seed: a clear effect (std 6.5 → 1.3, worst 60.7 → 71.4),
+  but not a basis for fine rankings between B, C and D.
+* The sweep ran on the surrogate twin only; nothing here is verified by the real M4.
+* Hyper-parameters other than the ones in the table were not explored.
+
+### 25.6 Final results with the fixed recipe
+Recipe B (`value_norm: true`) as the default, 5 seeds, **fresh test storms** (not the validation
+storms used to choose the recipe). Return per storm, mean ± std across seeds, identical storms for
+every policy. Surrogate twin only — **not verified by the real M4**.
+
+**Shortage world** (`--p-grid-loss 0.6`, with the memoryless ablation; 35 min):
+
+| policy | fresh storms | held-out `ditwah_like` | held-out `burevi_like` |
+|---|---|---|---|
+| always S1 | 61.19 ± 0.86 | 54.05 ± 3.89 | 64.24 ± 4.53 |
+| `u`-threshold | 65.28 ± 1.40 | 63.72 ± 0.84 | 66.11 ± 3.50 |
+| visible-outage rule | 71.02 ± 1.21 | 65.14 ± 0.96 | 73.00 ± 0.33 |
+| oracle (cheats) | 73.49 ± 0.85 | 71.17 ± 0.58 | 74.11 ± 0.56 |
+| **gate (GRU)** | **73.32 ± 0.92** | **71.33 ± 0.75** | **73.53 ± 0.69** |
+| gate, memoryless (MLP) | 73.28 ± 1.27 | 71.32 ± 0.83 | 73.91 ± 0.84 |
+
+**Original world** (`--p-grid-loss 0`; 21 min):
+
+| policy | fresh storms | held-out `ditwah_like` | held-out `burevi_like` |
+|---|---|---|---|
+| always S1 | 68.98 ± 1.23 | 64.12 ± 0.82 | 73.49 ± 0.90 |
+| visible-outage rule | 72.26 ± 0.80 | 67.59 ± 0.62 | 75.03 ± 0.64 |
+| oracle (cheats) | 75.03 ± 0.46 | 73.89 ± 0.23 | 76.80 ± 0.43 |
+| **gate (GRU)** | **74.57 ± 0.40** | **73.54 ± 0.45** | **75.90 ± 0.34** |
+
+Per-seed gate vs the rule on fresh storms (the stability check):
+
+| seed | 0 | 1 | 2 | 3 | 4 |
+|---|---|---|---|---|---|
+| shortage: gate | 73.8 | 74.6 | 73.1 | 72.1 | 73.0 |
+| shortage: rule | 71.4 | 72.5 | 70.7 | 69.2 | 71.3 |
+| original: gate | 74.9 | 74.5 | 73.9 | 74.6 | 74.9 |
+| original: rule | 72.3 | 72.8 | 71.3 | 71.6 | 73.2 |
+
+**Reading.**
+* **Stability is fixed.** All 5 seeds beat the rule on fresh storms in both worlds (before: 3 of 5
+  and 2 of 5). Seed-to-seed std fell from about 5.5 to about 0.9 (shortage) and 0.4 (original).
+* **The gate reaches the oracle on fresh storms** (73.32 vs 73.49; 74.57 vs 75.03) and edges past
+  it on `ditwah_like` (the oracle is not a strict ceiling, see §25.4). It beats the rule by about
+  6 points on held-out `ditwah_like` in both worlds.
+* **It wastes far less System 2:** on steps where the grid is intact it escalates 9% of the time
+  (before the fix: 38%); overall 38% vs the oracle's 34%.
+* **Weak spot:** on `burevi_like` the gain over the rule is small (73.53 vs 73.00 in the shortage
+  world — within noise; 75.90 vs 75.03 in the original world), and it escalates more than needed
+  there (26% of intact-grid steps in the shortage world).
+* **The GRU's memory is not shown to help.** The memoryless gate scores the same (73.28 vs 73.32;
+  71.32 vs 71.33 on `ditwah_like`; slightly *better* on `burevi_like`). The gate is given the
+  outage status directly (observation slots 12–14), so the task is nearly memoryless. Do **not**
+  claim learned meta-adaptation from these results. A task where the storm's severity or type is
+  hidden and must be inferred from history, or `policy.trials_per_task > 1`, is needed to test the
+  RL² claim.
+* **Still unverified:** nothing here has been run against the real M4 for the shortage world (it
+  cannot represent it), and the Burevi/Ditwah profiles are placeholders.
+
+*These numbers supersede §22 and §23.6, which were produced before the fix.*
