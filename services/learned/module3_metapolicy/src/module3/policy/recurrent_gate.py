@@ -57,9 +57,18 @@ class RecurrentGate(nn.Module):
             self.core = nn.Sequential(nn.Linear(hidden, hidden), nn.Tanh())
         self.actor = nn.Linear(hidden, 2)
         self.critic = nn.Linear(hidden, 1)
+        # Value normalisation (optional, see PPOConfig.value_norm): the critic predicts
+        # (return - v_mu) / v_sd so its loss has unit scale. Stored with the weights.
+        self.register_buffer("v_mu", torch.zeros(()))
+        self.register_buffer("v_sd", torch.ones(()))
+        self.register_buffer("v_ready", torch.zeros((), dtype=torch.bool))
         # Start slightly biased toward System 1 so early exploration does not burn the budget.
         with torch.no_grad():
             self.actor.bias.copy_(torch.tensor([0.3, -0.3]))
+
+    def to_return_units(self, value: torch.Tensor) -> torch.Tensor:
+        """Convert a critic output back to real reward units."""
+        return value * self.v_sd + self.v_mu
 
     def initial_state(self, batch: int = 1) -> torch.Tensor:
         """Empty memory (zeros). Reset at the start of every new storm/task."""

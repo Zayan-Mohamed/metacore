@@ -91,3 +91,81 @@ def test_multi_trial_tasks_carry_memory_without_error():
         log=lambda *_: None,
     )
     assert len(hist) == 1
+
+
+# --------------------------------------------------------------- stability fixes (section 25)
+def test_stabilisers_are_off_by_default_so_old_results_reproduce():
+    cfg = PPOConfig()
+    assert cfg.value_norm is False and cfg.ent_coef_final is None
+    assert cfg.target_kl is None and cfg.critic_warmup_updates == 0 and cfg.lr_final_frac == 1.0
+    m = RecurrentGate(hidden=8)
+    v = torch.tensor([3.0])
+    assert torch.equal(m.to_return_units(v), v)  # identity until normalisation is switched on
+
+
+def test_value_norm_fixes_the_critic_target_scale_from_the_first_batch():
+    env = CycloneGatingEnv(_cfg(), rng=np.random.default_rng(0))
+    model = RecurrentGate(hidden=16)
+    train_gate(
+        env,
+        model,
+        PPOConfig(updates=2, tasks_per_update=4, epochs=1, minibatch_tasks=2, value_norm=True),
+        trials_per_task=1,
+        seed=0,
+        log=lambda *_: None,
+    )
+    assert bool(model.v_ready) and float(model.v_sd) > 0.0
+    assert float(model.v_mu) != 0.0  # returns of a storm are far from zero
+    # the constants travel with the weights
+    clone = RecurrentGate(hidden=16)
+    clone.load_state_dict(model.state_dict())
+    assert float(clone.v_mu) == float(model.v_mu)
+
+
+def test_critic_warmup_leaves_the_policy_untouched():
+    env = CycloneGatingEnv(_cfg(), rng=np.random.default_rng(0))
+    model = RecurrentGate(hidden=16)
+    before = [p.detach().clone() for p in model.actor.parameters()]
+    train_gate(
+        env,
+        model,
+        PPOConfig(
+            updates=2, tasks_per_update=4, epochs=1, minibatch_tasks=2, critic_warmup_updates=2
+        ),
+        trials_per_task=1,
+        seed=0,
+        log=lambda *_: None,
+    )
+    after = list(model.actor.parameters())
+    # During critic warm-up only the value loss is applied, which does not touch the actor head,
+    # so its own weights must be bit-for-bit unchanged.
+    assert all(torch.equal(a, b) for a, b in zip(after, before, strict=True))
+
+
+def test_policy_does_learn_once_the_warmup_is_over():
+    env = CycloneGatingEnv(_cfg(), rng=np.random.default_rng(0))
+    model = RecurrentGate(hidden=16)
+    before = [p.detach().clone() for p in model.actor.parameters()]
+    train_gate(
+        env,
+        model,
+        PPOConfig(
+            updates=2, tasks_per_update=4, epochs=1, minibatch_tasks=2, critic_warmup_updates=1
+        ),
+        trials_per_task=1,
+        seed=0,
+        log=lambda *_: None,
+    )
+    assert any(not torch.equal(a, b) for a, b in zip(model.actor.parameters(), before, strict=True))
+
+
+def test_warm_start_copies_the_teacher_rule():
+    from module3.train.warmstart import WarmStartConfig, behaviour_clone, collect_teacher_data
+
+    env = CycloneGatingEnv(_cfg(), rng=np.random.default_rng(0))
+    wcfg = WarmStartConfig(tasks=12, epochs=25)
+    x, a = collect_teacher_data(env, wcfg, np.random.default_rng(1))
+    assert x.shape[0] == 12 and a.shape == x.shape[:2]
+    model = RecurrentGate(hidden=16)
+    stats = behaviour_clone(model, x, a, wcfg, seed=0)
+    assert stats["agreement_with_teacher"] > 0.8

@@ -46,6 +46,7 @@ ppo:
   vf_coef: 0.5
   ent_coef: 0.01
   max_grad_norm: 0.5
+  value_norm: true            # critic predicts standardised returns (fixed seed-to-seed collapse; see docs section 25)
 
 eval:
   seeds: [0, 1, 2, 3, 4]      # independent training runs ("five seeds")

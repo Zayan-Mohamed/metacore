@@ -19,7 +19,7 @@ References: Schulman et al. 2017 (PPO), Schulman et al. 2015 (GAE). See docs/mod
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import torch
@@ -42,6 +42,12 @@ class PPOConfig:
     vf_coef: float = 0.5
     ent_coef: float = 0.01
     max_grad_norm: float = 0.5
+    # --- stabilisers (all off by default so earlier results reproduce exactly) ---
+    value_norm: bool = False  # critic predicts standardised returns (unit-scale value loss)
+    ent_coef_final: float | None = None  # linearly anneal the entropy bonus to this value
+    lr_final_frac: float = 1.0  # linearly anneal the learning rate to lr * this
+    target_kl: float | None = None  # stop a PPO update early if the policy moved too far
+    critic_warmup_updates: int = 0  # first N updates train only the critic (actor frozen)
 
     @classmethod
     def from_dict(cls, d: dict | None) -> PPOConfig:
@@ -85,7 +91,7 @@ def collect_tasks(
                 ti.append(x[0, 0])
                 ta.append(a)
                 tl.append(dist.log_prob(a))
-                tv.append(value[0, 0])
+                tv.append(model.to_return_units(value[0, 0]))
                 tr.append(float(r))
                 prev_a, prev_r, done_flag = int(a.item()), float(r), 0.0
                 obs = obs_next
@@ -123,14 +129,24 @@ def ppo_update(
     batch: dict,
     cfg: PPOConfig,
     rng: np.random.Generator,
+    train_actor: bool = True,
 ) -> dict:
     """Several epochs of clipped-PPO updates on one batch of storms. Returns diagnostics."""
     adv, ret = compute_gae(batch["r"], batch["v"], cfg.gamma, cfg.gae_lambda)
     adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+    if cfg.value_norm:
+        if not bool(model.v_ready):  # fix the scale from the first batch of returns
+            model.v_mu.copy_(ret.mean())
+            model.v_sd.copy_(ret.std() + 1e-6)
+            model.v_ready.fill_(True)
+        ret = (ret - model.v_mu) / model.v_sd  # train the critic on a unit-scale target
     n = batch["x"].shape[0]
     stats = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "clip_frac": 0.0, "kl": 0.0}
     n_mb = 0
+    stop = False
     for _ in range(cfg.epochs):
+        if stop:
+            break
         order = rng.permutation(n)
         for s in range(0, n, cfg.minibatch_tasks):
             idx = torch.as_tensor(order[s : s + cfg.minibatch_tasks])
@@ -143,7 +159,11 @@ def ppo_update(
             pg = -torch.min(ratio * a, torch.clamp(ratio, 1 - cfg.clip, 1 + cfg.clip) * a).mean()
             vloss = 0.5 * (value - ret[idx]).pow(2).mean()
             ent = dist.entropy().mean()
-            loss = pg + cfg.vf_coef * vloss - cfg.ent_coef * ent
+            loss = (
+                pg + cfg.vf_coef * vloss - cfg.ent_coef * ent
+                if train_actor
+                else cfg.vf_coef * vloss  # critic warm-up: leave the policy alone
+            )
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.max_grad_norm)
@@ -154,6 +174,11 @@ def ppo_update(
             stats["clip_frac"] += ((ratio - 1).abs() > cfg.clip).float().mean().item()
             stats["kl"] += (-log_ratio).mean().item()
             n_mb += 1
+            if cfg.target_kl is not None and train_actor:
+                approx_kl = ((ratio - 1) - log_ratio).mean().item()
+                if approx_kl > 1.5 * cfg.target_kl:  # policy moved too far: stop this update
+                    stop = True
+                    break
     return {k: v / max(n_mb, 1) for k, v in stats.items()}
 
 
@@ -171,8 +196,16 @@ def train_gate(
     opt = torch.optim.Adam(model.parameters(), lr=cfg.lr)
     history = []
     for u in range(cfg.updates):
+        frac = u / max(cfg.updates - 1, 1)
+        for g in opt.param_groups:
+            g["lr"] = cfg.lr * (1.0 + (cfg.lr_final_frac - 1.0) * frac)
+        ucfg = (
+            replace(cfg, ent_coef=cfg.ent_coef + (cfg.ent_coef_final - cfg.ent_coef) * frac)
+            if cfg.ent_coef_final is not None
+            else cfg
+        )
         batch = collect_tasks(env, model, cfg.tasks_per_update, trials_per_task, rng)
-        stats = ppo_update(model, opt, batch, cfg, rng)
+        stats = ppo_update(model, opt, batch, ucfg, rng, train_actor=u >= cfg.critic_warmup_updates)
         row = {
             "update": u + 1,
             "mean_return_per_trial": float(batch["r"].sum(dim=1).mean() / trials_per_task),

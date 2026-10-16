@@ -32,21 +32,37 @@ from module3.env.cyclone_env import CycloneGatingEnv
 from module3.policy.recurrent_gate import RecurrentGate
 from module3.train.evaluate import BASELINES, evaluate_policy
 from module3.train.ppo import PPOConfig, train_gate
+from module3.train.warmstart import WarmStartConfig, behaviour_clone, collect_teacher_data
 from module3.twin.live_m4 import LiveM4Twin
 
-POLICIES = (*BASELINES, "gate", "gate_mlp")
+POLICIES = (*BASELINES, "gate_bc", "gate", "gate_mlp")
 METRICS = ("return", "served_fraction", "reject_rate", "s2_rate", "deliberation_cost")
 
 
-def _train(cfg: dict, arch: str, seed: int, log) -> tuple[RecurrentGate, list[dict]]:
+def _train(
+    cfg: dict, arch: str, seed: int, log
+) -> tuple[RecurrentGate, list[dict], RecurrentGate | None]:
+    """Build a gate, optionally warm-start it from a rule, then train it with PPO.
+
+    Returns (final gate, training log, snapshot taken right after the warm start or None).
+    """
     pol = cfg["policy"]
     env = CycloneGatingEnv(cfg, rng=np.random.default_rng(seed))
     torch.manual_seed(seed)
     model = RecurrentGate(hidden=int(pol["hidden"]), arch=arch)
+    bc_snapshot = None
+    ws = pol.get("warm_start")
+    if ws:
+        wcfg = WarmStartConfig.from_dict(ws if isinstance(ws, dict) else {})
+        x, a = collect_teacher_data(env, wcfg, np.random.default_rng(seed + 12_345))
+        stats = behaviour_clone(model, x, a, wcfg, seed)
+        agree = stats["agreement_with_teacher"]
+        log(f"  warm start: copies '{wcfg.teacher}' on {agree:.0%} of steps")
+        bc_snapshot = deepcopy(model)
     hist = train_gate(
         env, model, PPOConfig.from_dict(cfg["ppo"]), int(pol.get("trials_per_task", 1)), seed, log
     )
-    return model, hist
+    return model, hist, bc_snapshot
 
 
 def _evaluate_all(
@@ -56,6 +72,7 @@ def _evaluate_all(
     twin=None,
     n_random: int | None = None,
     n_profile: int | None = None,
+    storm_offset: int = 0,
 ) -> dict:
     """Score every policy on one seed's storms: 'random' plus each held-out profile."""
     ev = cfg["eval"]
@@ -67,7 +84,8 @@ def _evaluate_all(
     suites = {"random": (None, n_random), **{p: (p, n_profile) for p in ev["profiles"]}}
     for suite, (spec, n) in suites.items():
         storm_seeds = [
-            1_000_000 * (seed + 1) + 10_000 * list(suites).index(suite) + i for i in range(n)
+            storm_offset + 1_000_000 * (seed + 1) + 10_000 * list(suites).index(suite) + i
+            for i in range(n)
         ]
         out[suite] = {}
         for pol in BASELINES:
@@ -171,8 +189,10 @@ def run(cfg: dict, out: Path, live_url: str | None, quick: bool, log=print) -> d
     t0 = time.time()
     for seed in seeds:
         log(f"\n=== seed {seed}: training {arch} gate ===")
-        gate, hist = _train(cfg, arch, seed, log)
+        gate, hist, bc = _train(cfg, arch, seed, log)
         models = {"gate": gate}
+        if bc is not None:
+            models = {"gate_bc": bc, **models}  # warm-start-only snapshot, for honest comparison
         histories[f"gate_seed{seed}"] = hist
         torch.save(
             {"state_dict": gate.state_dict(), "arch": arch, "hidden": gate.hidden, "config": cfg},
@@ -180,7 +200,7 @@ def run(cfg: dict, out: Path, live_url: str | None, quick: bool, log=print) -> d
         )
         if ablate:
             log(f"=== seed {seed}: training memoryless (mlp) ablation ===")
-            mlp, mh = _train(cfg, "mlp", seed, log)
+            mlp, mh, _ = _train(cfg, "mlp", seed, log)
             models["gate_mlp"] = mlp
             histories[f"gate_mlp_seed{seed}"] = mh
         per_seed.append(_evaluate_all(cfg, models, seed))
