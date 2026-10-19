@@ -3,10 +3,12 @@
     reward = w_serve * served_fraction          (priority-weighted load served, 0..1)
            - w_viol  * violating_bus_fraction   (share of buses the firewall flags)
            - deliberation_cost  [System 2 only] (budget/compute spent thinking)
-           - w_latency * path_latency / budget  (slower path costs more; S1 2 ms, S2 18 ms)
+           - w_latency * path_latency / budget  (a path-dependent deliberation cost; see below)
 
 The first two terms come from the grid twin and ARE the 'survival' signal. The last two are
-the price of deliberating. This replaces the hand-written 7-case table in `gating_env.py`
+the price of deliberating. The "latency" values (S1 2, S2 18) are cost weights, not measured
+milliseconds: the measured planning times are ~0.01 / ~0.02 ms (docs/module3.md section 27.1).
+They are kept so earlier results stay valid. This replaces the hand-written 7-case table in `gating_env.py`
 (which stays, unchanged, for the dashboard demo and as an ablation baseline).
 """
 

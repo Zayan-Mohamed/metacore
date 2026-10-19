@@ -23,6 +23,9 @@ reward:
   w_serve: 1.0
   w_viol: 2.0
   deliberation_cost: 0.05
+  # The next three are NOT measured latencies (measured: S1 ~0.01 ms, S2 ~0.02 ms, docs §27.1).
+  # They are a second, path-dependent deliberation cost: S2 pays w_latency*18/50 = 0.018, S1 0.002.
+  # Kept at these values so the results in §25-26 stay valid; do not read them as milliseconds.
   w_latency: 0.05
   latency_s1_ms: 2.0
   latency_s2_ms: 18.0

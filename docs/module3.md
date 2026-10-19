@@ -1151,8 +1151,8 @@ grid lost 0.075 / 0.136.
 * **The reward's latency constants are invented and wrong.** `reward.latency_s1_ms = 2` and
   `latency_s2_ms = 18` are stand-ins; measured planning times are ~0.01 and ~0.02 ms. Today that
   term (`w_latency · Δms / 50 = 0.016` per System 2 step) is really just a hidden extra
-  deliberation cost. It has NOT been changed here, because changing it would invalidate the
-  results in §25–26; decision for the team (§27.5).
+  deliberation cost. It has NOT been changed, because changing it would invalidate the
+  results in §25–26; it is relabelled instead (§27.5).
 * **MDP vs SMDP (§2.1) is settled for now:** System 2 takes ≈0.02 ms against a control period
   of tens of ms, so the fixed-step MDP stands. This must be re-measured if System 2 becomes an
   optimiser or runs OpenDSS in the loop.
@@ -1204,9 +1204,39 @@ The task says *thermal-budget*, and the repo does not define it. Two readings:
   machine.
 Nothing was built for either; the choice is the owner's (§27.5).
 
-### 27.5 Decisions needed
-1. **Reward latency constants:** set to the measured ~0.01/0.02 ms (the term vanishes, retrain and
-   re-run §25–26), or keep 2/18 ms and relabel it as a deliberation-cost component?
-2. **Thermal:** which reading of §27.4, and is a surrogate approximation enough for PP1?
-3. **M4 tail latency:** p99 48 ms / max 65 ms through the gateway is over the 50 ms budget —
-   raise with the M4 owner (F5: snapshot/restore instead of recompiling).
+### 27.5 Decisions
+1. **Reward latency constants — DECIDED (2026-10-19): relabel, keep the values.** `latency_s1_ms: 2`
+   and `latency_s2_ms: 18` stay, so §25–26 remain valid, but they are now documented (in
+   `pipeline.yaml` and `env/reward.py`) as a second path-dependent *deliberation cost* (S2 pays
+   0.018 per step, S1 0.002), **not** measured milliseconds. No code behaviour changed. The honest
+   caveat: the gate is therefore penalised for System 2 twice (0.05 + 0.018 per step), and any
+   statement that the gate "trades latency for safety" is not supported by this reward.
+2. **Thermal — OPEN:** which reading of §27.4, and is a surrogate approximation enough for PP1?
+3. **M4 tail latency — DECIDED: raise with the M4 owner.** Message below (§27.6). Not yet sent.
+
+### 27.6 DRAFT note to M4 — end-to-end `verify()` tail latency  *(not sent)*
+**To:** Hariswara (M4) · **From:** Saabir (M3) · **Status:** draft, for Saabir to send alongside §24.
+
+**What M3 measured** (`scripts/profile_latency.py --live-m4`, real calls through the gateway
+`POST /api/module4/verify`, single machine, load not controlled; storm-overlay commands included,
+no `grid_lost` cases):
+
+| p50 | p95 | p99 | max |
+|---|---|---|---|
+| 30.2 ms | 46.1 ms | 48.2 ms | 65.4 ms |
+
+**Why it matters.** The M4 real-time budget is 50 ms. The p99 is at the limit and the slowest calls
+are over it. M3's own work (gate + System 1/2 plan) is under 1 ms at p99, so M4 is effectively the
+entire decision latency.
+
+**Likely cause** (same as F5): every call recompiles the circuit (`reset_to_base`); the power-flow
+solve itself is ~0.2 ms. The `solve_latency_ms` M4 reports therefore understates the cost the
+caller sees.
+
+**Ask.** (1) Compile once and snapshot/restore (or re-apply only the changed elements) per call.
+(2) Report end-to-end handler latency, not only the solve time, in the response.
+(3) If possible, a target for p99 through the gateway so M3 can set its guard deadline
+(`LatencyGuard.step_deadline_ms`, currently 50) from a real number.
+
+**Caveat.** The earlier §21 F5 figure was ~13 ms; the difference is not yet explained (storm
+overlay commands, load on the machine). A re-measurement on a quiet machine would settle it.
