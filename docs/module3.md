@@ -1284,8 +1284,8 @@ GRU improvement minus MLP improvement: +0.19 (fresh; GRU larger on 3/5 seeds), �
 * Fresh damage: the average gain is +0.4 with a seed-to-seed spread of 6.1, i.e. noise. Per seed the
   GRU improved on 3 seeds (e.g. 65.0 → 71.9) and got *worse* on 2 (66.9 → 61.0; 72.1 → 66.0).
 * Identical replay is the easiest case for learning a storm (the same damage every time), and the
-  GRU did not exploit it: it rose on trials 1–3 on average, then fell at trial 4 (4 of 5 seeds
-  lowest or near-lowest at trial 4). Two seeds were flat, one collapsed to 64 from the start.
+  GRU did not exploit it: it rose on trials 1–3 on average, then fell at trial 4 (trial 4 was the
+  lowest of the four on 4 of 5 seeds). One seed was flat and one sat at 64 from the start.
 * **The GRU's behaviour drifts with trial number.** On several seeds its System 2 rate climbs
   steadily across trials (e.g. 0.16 → 0.30 → 0.54 → 0.56) while the storm is identical. A policy
   whose actions change with no new information about the storm is behaving like a *trial counter*
