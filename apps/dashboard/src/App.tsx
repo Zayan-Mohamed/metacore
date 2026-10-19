@@ -6,6 +6,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import AgentStateRoute from "./routes/agent-state";
+import CycloneRoute from "./routes/cyclone";
 import GatingRoute from "./routes/gating";
 import UncertaintyRoute from "./routes/uncertainty";
 import VerificationRoute from "./routes/verification";
@@ -16,6 +17,7 @@ export default function App() {
       <Route path="/" element={<Navigate to="/gating" replace />} />
       <Route path="/agent-state" element={<AgentStateRoute />} />
       <Route path="/gating" element={<GatingRoute />} />
+      <Route path="/cyclone" element={<CycloneRoute />} />
       <Route path="/uncertainty" element={<UncertaintyRoute />} />
       <Route path="/verification" element={<VerificationRoute />} />
     </Routes>

@@ -1,0 +1,199 @@
+/* Cyclone lab. Cards, buttons and fields come from ../gating/gating.css; tokens from styles/tokens.css. */
+.cyclone a {
+  color: var(--blue);
+}
+
+.cyclone__presets {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 6px;
+  flex-wrap: wrap;
+}
+.cyclone__chip {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+.cyclone__chip--on {
+  background: var(--amber-soft);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.cyclone__chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.cyclone__knobs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px 26px;
+  margin-top: 14px;
+}
+.cyclone__knob {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cyclone__knob-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+.cyclone__knob-head small {
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.cyclone__knob input[type="range"] {
+  width: 100%;
+  accent-color: var(--amber);
+}
+
+/* timeline */
+.cyclone__timeline {
+  width: 100%;
+  height: auto;
+  margin-top: 12px;
+  display: block;
+}
+.cyclone__lane-label {
+  fill: var(--text-muted);
+  font-size: 11px;
+}
+.cyclone__lane-unit {
+  fill: var(--text-dim);
+  font-size: 9.5px;
+}
+.cyclone__grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.cyclone__grid--dash {
+  stroke-dasharray: 4 4;
+}
+.cyclone__wind {
+  fill: none;
+  stroke: var(--blue);
+  stroke-width: 2;
+}
+.cyclone__prob {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 2;
+}
+.cyclone__reward {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 1.6;
+}
+.cyclone__s2-band {
+  fill: var(--amber);
+  fill-opacity: 0.1;
+}
+.cyclone__tripped {
+  fill: var(--red);
+  fill-opacity: 0.85;
+}
+.cyclone__gridlost {
+  fill: var(--violet);
+  fill-opacity: 0.35;
+}
+.cyclone__comms {
+  fill: var(--blue);
+  opacity: 0.7;
+}
+.cyclone__hover {
+  fill: transparent;
+}
+.cyclone__hover--on {
+  fill: var(--text);
+  fill-opacity: 0.08;
+  stroke: var(--text-dim);
+  stroke-width: 0.5;
+}
+
+.cyclone__detail {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px 18px;
+  margin: 12px 0 0;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.cyclone__detail--empty {
+  display: block;
+  color: var(--text-dim);
+}
+.cyclone__detail dt {
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.cyclone__detail dd {
+  margin: 2px 0 0;
+}
+
+/* comparison table */
+.cyclone__table {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+}
+.cyclone__row {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr 2fr 0.7fr 0.8fr 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 4px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+}
+.cyclone__row--head {
+  border-top: none;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.cyclone__row--gate {
+  background: var(--green-soft);
+  border-radius: 6px;
+}
+.cyclone__bar {
+  position: relative;
+  height: 8px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.cyclone__bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--text-muted);
+}
+.cyclone__row--gate .cyclone__bar i {
+  background: var(--green);
+}
+.cyclone__note {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+@media (max-width: 760px) {
+  .cyclone__row {
+    grid-template-columns: 1.4fr 0.8fr 0.8fr;
+  }
+  .cyclone__row > :nth-child(3),
+  .cyclone__row > :nth-child(5),
+  .cyclone__row > :nth-child(6) {
+    display: none;
+  }
+}

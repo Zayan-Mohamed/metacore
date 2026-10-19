@@ -192,3 +192,51 @@ def process_gate() -> Module3ProcessResult:
             tmp_output,
         )
     return Module3ProcessResult(**payload)
+
+
+# ---------------------------------------------------------------- Cyclone lab
+# Plays one user-defined storm through a trained gate (module3.serve.storm). Needs the trained
+# checkpoints under artifacts/pipeline/final_islanded, which are not in git: without them the
+# endpoint answers 409 with the reason instead of a stack trace.
+STORM_TIMEOUT_S = 60
+
+
+class StormParams(BaseModel):
+    peak_wind_kmh: float | None = Field(None, ge=20, le=250)
+    peak_frac: float | None = Field(None, ge=0.1, le=0.9)
+    width_frac: float | None = Field(None, ge=0.03, le=0.40)
+    trip_scale: float | None = Field(None, ge=0, le=0.6)
+    comms_rate: float | None = Field(None, ge=0, le=0.6)
+    diesel_loss_prob: float | None = Field(None, ge=0, le=1)
+    grid_loss_prob: float | None = Field(None, ge=0, le=1)
+    ood: bool | None = None
+
+
+class Module3StormRequest(BaseModel):
+    preset: str | None = Field(None, pattern="^(burevi_like|ditwah_like)$")
+    random: bool = False
+    params: StormParams = StormParams()
+    seed: int = Field(0, ge=0, le=1_000_000)
+    gate_seed: int = Field(0, ge=0, le=4)
+
+
+@router.get("/storm/presets")
+def storm_presets() -> dict[str, Any]:
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "presets.json"
+        return _run_module3_script(["scripts/storm_run.py", "presets", str(out)], STEP_TIMEOUT_S, out)
+
+
+@router.post("/storm")
+def run_storm(req: Module3StormRequest) -> dict[str, Any]:
+    spec = {
+        "preset": req.preset,
+        "random": req.random,
+        "params": req.params.model_dump(exclude_none=True),
+        "seed": req.seed,
+        "gate_seed": req.gate_seed,
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        inp, out = Path(tmp) / "request.json", Path(tmp) / "result.json"
+        inp.write_text(json.dumps(spec))
+        return _run_module3_script(["scripts/storm_run.py", str(inp), str(out)], STORM_TIMEOUT_S, out)

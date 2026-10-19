@@ -159,6 +159,93 @@ export async function processModule3Gate(): Promise<Module3ProcessResult> {
   return postModule3("/api/module3/process");
 }
 
+// ---------------------------------------------------------------- Module 3 cyclone lab
+// One user-defined storm played through a trained gate and the baselines
+// (services/learned/module3_metapolicy/src/module3/serve/storm.py via gateway /api/module3/storm).
+
+export const STORM_KNOBS = [
+  "peak_wind_kmh",
+  "peak_frac",
+  "width_frac",
+  "trip_scale",
+  "comms_rate",
+  "diesel_loss_prob",
+  "grid_loss_prob",
+] as const;
+export type StormKnob = (typeof STORM_KNOBS)[number];
+
+export type StormParams = Record<StormKnob, number> & { ood: boolean };
+
+export interface StormPresets {
+  ranges: Record<StormKnob, [number, number]>;
+  default: StormParams;
+  presets: Record<string, StormParams>;
+  note: string;
+}
+
+export interface StormRequest {
+  preset?: string | null;
+  random?: boolean;
+  params?: Partial<StormParams>;
+  seed: number;
+  gate_seed: number;
+}
+
+export interface StormStep {
+  t: number;
+  wind_kmh: number;
+  stage: string;
+  tripped: number;
+  grid_lost: boolean;
+  comms_up: boolean;
+  u: number;
+  trigger: string;
+  p_s2: number | null;
+  action: 0 | 1;
+  requested: 0 | 1;
+  budget_fallback: boolean;
+  reward: number;
+  served: number;
+  approved: boolean;
+  violations: number;
+}
+
+export interface StormSummary {
+  return: number;
+  s2_rate: number;
+  served_fraction: number;
+  reject_rate: number;
+}
+
+export interface StormResult {
+  params: StormParams;
+  seed: number;
+  gate_seed: number;
+  episode_len: number;
+  gate: StormSummary & { steps: StormStep[] };
+  baselines: Record<string, StormSummary>;
+  notes: string[];
+}
+
+export async function fetchStormPresets(): Promise<StormPresets> {
+  const res = await fetch("/api/module3/storm/presets");
+  if (!res.ok) {
+    throw new Module3RunError(`Failed to fetch storm presets (HTTP ${res.status})`, res.status);
+  }
+  return (await res.json()) as StormPresets;
+}
+
+export async function runStorm(req: StormRequest): Promise<StormResult> {
+  return postModule3("/api/module3/storm", req);
+}
+
+// How many times the gate switched between System 1 and System 2 during the storm.
+export function countSwitches(steps: StormStep[]): number {
+  let n = 0;
+  for (let i = 1; i < steps.length; i++) if (steps[i].action !== steps[i - 1].action) n++;
+  return n;
+}
+
 // Shared POST + FastAPI error unwrapping. `detail` is a string for our own HTTPExceptions
 // and an array of {msg} for pydantic validation errors.
 async function postJson<T>(

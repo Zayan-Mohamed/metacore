@@ -5,6 +5,7 @@
 // and the paired ProposedControlAction/GatingDecision log.
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { Link } from "react-router-dom";
 
 import {
   MODULE3_DEFAULT_CONFIG,
@@ -389,7 +390,8 @@ export default function GatingRoute() {
               </div>
               <p className="gating__subtitle">
                 Three steps: <b>Train</b> the chooser, <b>Generate</b> one situation (the 12 numbers
-                the gate sees, including M2’s u), then <b>Process</b> to get the action plan.
+                the gate sees, including M2’s u), then <b>Process</b> to get the action plan.{" "}
+                <Link to="/cyclone">Set your own cyclone and test the Meta-RL gate →</Link>
               </p>
             </div>
           </div>

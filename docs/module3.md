@@ -363,6 +363,9 @@ Meta-RL pipeline is first.
 * **GRU memory test — RUN (2026-10-19, §26).** With the damage hidden the GRU helps a little
   (blind: +0.3 to +0.5) and a lot when severity is also hidden (the memoryless gate collapses to
   always-S1).
+* **Cyclone lab dashboard page — BUILT (2026-10-19, §29).** `/cyclone` in the dashboard: set the
+  storm's parameters (or pick a preset / random storm), play it through a trained gate and the
+  baselines, read the timeline. Not yet the live-M4 or the deliberation-cost view.
 * **Repeated-trials test — RUN (2026-10-19, §28). Negative.** Trained and tested on 4 plays of the
   same storm, the GRU does not improve from play 1 to play 4 (fresh damage +0.4 ± 6.1; identical
   replay −1.5 ± 1.4), and the memoryless gate scores higher in this setup. No evidence of
@@ -1309,3 +1312,58 @@ state (§26)*; RL²-style adaptation across repeated trials was tested and **not
 state and read how its output depends on step index); more updates or a curriculum from 1 to 4
 trials; a task latent that is hidden, persistent and decision-relevant (e.g. which feeder is
 fragile), which is what RL² needs to have something to infer.
+
+---
+
+# Part VIII — Dashboard
+
+## 29. Cyclone lab: set the storm's parameters and test the gate (2026-10-19)
+
+ClickUp: dashboard gating-decision timeline (z8py7aaz79) — partly covered, see "Not covered".
+Page: `apps/dashboard/src/routes/cyclone/` (route `/cyclone`; linked from `/gating`).
+
+**What it does.** Sets one storm, plays it through a trained gate and the five reference policies,
+and shows the result. The storm does not react to the controller, so every policy faces the
+identical storm and differences in return come only from the decisions.
+
+* **Parameters (7 sliders + 1 switch):** peak wind, peak timing, storm duration, line fragility
+  (`trip_scale`), comms-loss rate, diesel-loss probability, main-supply-cut probability, and
+  "unseen conditions" (`ood`). Presets: default, `burevi_like`, `ditwah_like` (placeholder
+  parameter sets, as in §10), plus a **Random storm** drawn from the training distribution. Plus
+  the storm seed and which of the five trained gates (training seeds 0–4) to use.
+* **Timeline** (shared x-axis): wind with the elevated/severe/extreme lines; damage (feeders
+  actually out, main supply lost, telemetry down); the gate's P(System 2) with the 0.5 line;
+  per-step reward. Steps where the gate chose System 2 are shaded across all lanes. Hovering a
+  step shows its wind, damage, M2 `u` and reason, P(S2), decision, reward, load served and the
+  twin's verdict.
+* **Comparison table:** return, System 2 share, load served and twin-reject rate for the gate,
+  always-S1, always-S2, `u > threshold`, the outage rule and the oracle, on that storm.
+
+**Plumbing.** `module3.serve.storm.simulate_storm` (validated inputs: an unknown knob or an
+out-of-range value is rejected, never ignored) ← `scripts/storm_run.py` ← gateway
+`POST /api/module3/storm` and `GET /api/module3/storm/presets` (same subprocess pattern as the
+older `/run`) ← the page. Tests: `tests/test_storm.py` (12) and three in
+`services/gateway/tests/test_module3_router.py`.
+
+**Checked** by running the page in a browser against a live gateway: presets load, a Ditwah-like
+storm runs, the timeline renders and the hover detail works.
+Example (storm seed 1, `ditwah_like`, gate seed 0): gate 75.30 vs outage rule 72.18, always-S1
+69.91, always-S2 67.98, oracle 75.15, with one S1→S2 switch just as the first feeders trip.
+**One storm is one sample**; the averaged evidence is §25.6, and the page says so.
+
+**Limits and honesty notes.**
+* The grid is the **surrogate twin**, not the live M4 firewall (the live twin refuses `grid_lost`,
+  §24 is unsent).
+* The oracle is a reference that reads the true damage, **not an upper bound**: the gate beats it
+  on the example storm. The page labels it that way.
+* **The trained checkpoints are not in git** (`artifacts/` is ignored, ~110 KB each). On a fresh
+  clone the page answers "no trained gate … run the pipeline first" (HTTP 409). Decision for the
+  team: commit the five `final_islanded` checkpoints, or publish them with the results.
+* The presets request takes a few seconds because it starts a Python process; the knobs appear
+  after it returns.
+* Like the older `/run` endpoint it needs the gateway to run in the shared workspace venv (torch),
+  not the gateway's slim Docker image.
+
+**Not covered (still open on the timeline task):** the *deliberation cost incurred* is only
+visible through the reward lane (no separate cost trace); no live-M4 mode; no dashboard control
+for the gate's tuning options (§27.3) or the latency guard.

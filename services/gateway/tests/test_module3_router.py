@@ -56,3 +56,27 @@ def test_module3_run_returns_result_shape() -> None:
     assert body["chosen"] in {"SYSTEM1", "SYSTEM2"}
     assert body["plan"]["origin"] == body["chosen"]
     assert "load_shed" in body["plan"]
+
+
+def test_storm_presets_list_every_knob() -> None:
+    r = client.get("/api/module3/storm/presets")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert "peak_wind_kmh" in body["ranges"]
+    assert {"burevi_like", "ditwah_like"} <= set(body["presets"])
+
+
+def test_storm_rejects_out_of_range_parameter() -> None:
+    r = client.post("/api/module3/storm", json={"params": {"peak_wind_kmh": 9000}})
+    assert r.status_code == 422
+
+
+def test_storm_runs_or_explains_missing_checkpoint() -> None:
+    r = client.post("/api/module3/storm", json={"preset": "ditwah_like", "seed": 1})
+    if r.status_code == 409:  # trained checkpoints are not in git
+        assert "no trained gate" in r.json()["detail"]
+        return
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert len(data["gate"]["steps"]) == data["episode_len"]
+    assert "oracle" in data["baselines"]
