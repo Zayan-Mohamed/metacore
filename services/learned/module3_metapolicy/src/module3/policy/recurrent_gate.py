@@ -45,11 +45,17 @@ def build_inputs(obs, prev_action, prev_reward, trial_done) -> torch.Tensor:
 
 
 class RecurrentGate(nn.Module):
-    def __init__(self, obs_dim: int = OBS_DIM, hidden: int = 64, arch: str = "gru") -> None:
+    def __init__(
+        self, obs_dim: int = OBS_DIM, hidden: int = 64, arch: str = "gru", feedback: bool = True
+    ) -> None:
         super().__init__()
         if arch not in ("gru", "mlp"):
             raise ValueError(f"arch must be 'gru' or 'mlp', got {arch!r}")
         self.arch, self.hidden, self.obs_dim = arch, hidden, obs_dim
+        # feedback=False hides the previous action/reward (memory test, docs section 26): the
+        # previous reward leaks the storm's damage, so without this the "memoryless" MLP still
+        # has one step of memory.
+        self.feedback = feedback
         self.embed = nn.Sequential(nn.Linear(obs_dim + EXTRA_DIM, hidden), nn.Tanh())
         if arch == "gru":
             self.core = nn.GRU(hidden, hidden, batch_first=True)
@@ -76,6 +82,11 @@ class RecurrentGate(nn.Module):
 
     def forward(self, x: torch.Tensor, h: torch.Tensor | None = None):
         """x: (B, T, obs_dim+4). Returns logits (B,T,2), value (B,T), new memory h."""
+        if not self.feedback:
+            x = torch.cat(
+                [x[..., : self.obs_dim], torch.zeros_like(x[..., self.obs_dim : -1]), x[..., -1:]],
+                dim=-1,
+            )
         z = self.embed(x)
         if self.arch == "gru":
             z, h = self.core(z, h if h is not None else self.initial_state(x.shape[0]))

@@ -169,3 +169,55 @@ def test_warm_start_copies_the_teacher_rule():
     model = RecurrentGate(hidden=16)
     stats = behaviour_clone(model, x, a, wcfg, seed=0)
     assert stats["agreement_with_teacher"] > 0.8
+
+
+# --------------------------------------------------------------- memory test knobs (section 26)
+def test_feedback_off_makes_the_gate_blind_to_previous_reward_and_action():
+    torch.manual_seed(0)
+    obs = torch.rand(1, 3, OBS_DIM) * 0.5
+    obs[..., 10] = 1.0
+    zero = torch.zeros(1, 3)
+    args = (torch.zeros(1, 3, dtype=torch.long), zero, zero)
+    other = (torch.ones(1, 3, dtype=torch.long), zero + 1.5, zero)
+    for arch in ("gru", "mlp"):
+        blind = RecurrentGate(hidden=8, arch=arch, feedback=False)
+        same = torch.allclose(
+            blind(build_inputs(obs, *args))[0], blind(build_inputs(obs, *other))[0]
+        )
+        assert same
+        seeing = RecurrentGate(hidden=8, arch=arch, feedback=True)
+        assert not torch.allclose(
+            seeing(build_inputs(obs, *args))[0], seeing(build_inputs(obs, *other))[0]
+        )
+
+
+def test_hide_obs_zeroes_only_the_named_slots_and_default_hides_nothing():
+    cfg = _cfg()
+    cfg["scenario"]["p_grid_loss"] = 1.0
+    cfg["scenario"]["trip_scale"] = 5.0  # make damage certain so slots 12-14 are non-zero
+    shown = CycloneGatingEnv(cfg, rng=np.random.default_rng(3))
+    cfg2 = _cfg()
+    cfg2["scenario"].update(cfg["scenario"])
+    cfg2["env"]["hide_obs"] = [12, 13, 14]
+    hidden = CycloneGatingEnv(cfg2, rng=np.random.default_rng(3))
+    o_shown, _ = shown.reset(seed=11)
+    o_hidden, _ = hidden.reset(seed=11)
+    seen = [o_shown]
+    blind = [o_hidden]
+    for _ in range(19):
+        s, *_ = shown.step(0)
+        h, *_ = hidden.step(0)
+        seen.append(s)
+        blind.append(h)
+    seen, blind = np.array(seen[:-1]), np.array(blind[:-1])
+    assert (blind[:, 12:15] == 0).all() and (seen[:, 12:15] != 0).any()
+    assert np.allclose(seen[:, :12], blind[:, :12])  # everything else is identical
+
+
+def test_hide_obs_rejects_a_bad_index():
+    import pytest
+
+    cfg = _cfg()
+    cfg["env"]["hide_obs"] = [99]
+    with pytest.raises(ValueError):
+        CycloneGatingEnv(cfg)

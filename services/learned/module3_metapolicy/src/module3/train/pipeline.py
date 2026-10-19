@@ -49,7 +49,9 @@ def _train(
     pol = cfg["policy"]
     env = CycloneGatingEnv(cfg, rng=np.random.default_rng(seed))
     torch.manual_seed(seed)
-    model = RecurrentGate(hidden=int(pol["hidden"]), arch=arch)
+    model = RecurrentGate(
+        hidden=int(pol["hidden"]), arch=arch, feedback=bool(pol.get("feedback", True))
+    )
     bc_snapshot = None
     ws = pol.get("warm_start")
     if ws:

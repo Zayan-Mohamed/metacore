@@ -155,7 +155,11 @@ class CycloneGatingEnv(gym.Env):
         self._tier_weights = weights
         self.twin: Twin = twin if twin is not None else SurrogateTwin(weights)
         self._scenario_cfg = cfg.get("scenario") or {}
-        self._rng = rng if rng is not None else np.random.default_rng(int(cfg.get("seed", 0)))
+        # Memory test (docs section 26): observation slots the gate is NOT shown (zeroed).
+        self._hidden = sorted({int(i) for i in env_cfg.get("hide_obs", [])})
+        if any(not 0 <= i < OBS_DIM for i in self._hidden):
+            raise ValueError(f"env.hide_obs must be indices in 0..{OBS_DIM - 1}")
+        self._rng =rng if rng is not None else np.random.default_rng(int(cfg.get("seed", 0)))
 
         self.observation_space = spaces.Box(low=-1.0, high=1.0, shape=(OBS_DIM,), dtype=np.float32)
         self.action_space = spaces.Discrete(2)
@@ -206,7 +210,7 @@ class CycloneGatingEnv(gym.Env):
         sev = HAZARD_STAGES.index(ctx["severity"])
         tth = float(np.clip(ctx["time_to_hazard_onset_min"], -30.0, 30.0)) / 30.0
         tripped_visible = len(known_tripped & set(OVERHEAD_LINES)) / max(len(OVERHEAD_LINES), 1)
-        return np.array(
+        obs = np.array(
             [
                 float(m2["epistemic_uncertainty"]),
                 1.0 if reason in ("value", "both") else 0.0,
@@ -226,6 +230,9 @@ class CycloneGatingEnv(gym.Env):
             ],
             dtype=np.float32,
         )
+        if self._hidden:
+            obs[self._hidden] = 0.0
+        return obs
 
     # ------------------------------------------------------------------ one step
     def step(self, action):

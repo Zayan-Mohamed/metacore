@@ -355,6 +355,9 @@ Meta-RL pipeline is first.
   planner can be tested against the real firewall.
 * **Training stability — FIXED (2026-10-17, §25).** Standardising the critic's target made all 5
   seeds beat the rule in both worlds. Open caveat: the GRU's memory is not shown to help (§25.6).
+* **GRU memory test — RUN (2026-10-19, §26).** With the damage hidden the GRU helps a little
+  (blind: +0.3 to +0.5) and a lot when severity is also hidden (the memoryless gate collapses to
+  always-S1). Within-storm adaptation (`trials_per_task > 1`) is still untested.
 * **Meta-RL pipeline — BUILT, READY FOR DEV REVIEW (2026-10-17).** Pushed on `m3/gate-policy`; no
   PR opened; ClickUp has no "PR review by dev" status yet. PPO + GRU (RL²) gate, simulated
   cyclones with four disturbances, physical priority-weighted reward, surrogate-trained /
@@ -1033,3 +1036,76 @@ Per-seed gate vs the rule on fresh storms (the stability check):
   cannot represent it), and the Burevi/Ditwah profiles are placeholders.
 
 *These numbers supersede §22 and §23.6, which were produced before the fix.*
+
+---
+
+# Part V — Does the GRU's memory help?
+
+## 26. Memory test: hiding the damage from the gate (2026-10-19)
+
+### 26.1 Why this test, and a flaw it exposed
+In §25.6 the memoryless gate (MLP) matched the GRU. That is expected when the gate is *told* what
+broke (observation slots 12–14), because there is nothing left to remember. Memory can only matter
+when the gate must **infer** the storm's state from what it has already seen.
+
+Flaw found while designing it: the "memoryless" MLP was not memoryless. Both architectures also
+receive the **previous action and previous reward** (the RL² input), and the previous reward leaks
+the storm's damage. So the MLP had one step of memory. Fix: `policy.feedback: false` zeroes the
+previous action/reward (`policy/recurrent_gate.py::RecurrentGate.forward`). The `_nofb` arms below
+are the strictly memoryless controls.
+
+### 26.2 Setup (code: `scripts/memory_test.py`, `env.hide_obs`, `policy.feedback`)
+Shortage world (`p_grid_loss = 0.6`), 5 seeds per arm, scored on validation storms (offset
+500_000_000, disjoint from the final-report storms). `env.hide_obs` zeroes the named observation
+slots (default: none, so earlier results reproduce).
+
+| world | hidden slots | what the gate cannot see |
+|---|---|---|
+| visible | – | nothing (the §25 setup) |
+| blind | 12, 13, 14 | which feeders tripped, generation left, grid lost |
+| very blind | 8, 9, 12, 13, 14 | also severity and time to hazard |
+
+### 26.3 Results (return per storm, mean ± std over 5 seeds)
+| arm | mean | std | worst | S2 rate | S2 when grid intact |
+|---|---|---|---|---|---|
+| visible GRU | 73.48 | 1.34 | 71.40 | 0.36 | 0.07 |
+| visible MLP | 73.42 | 1.15 | 71.74 | 0.36 | 0.08 |
+| blind GRU | 72.71 | 1.00 | 71.04 | 0.36 | 0.11 |
+| blind MLP | 72.22 | 0.95 | 71.00 | 0.45 | 0.25 |
+| blind GRU, no feedback | 72.78 | 1.06 | 71.08 | 0.37 | 0.12 |
+| blind MLP, no feedback | 72.43 | 1.30 | 70.49 | 0.49 | 0.29 |
+| very blind GRU | 72.15 | 1.61 | 69.65 | 0.26 | 0.04 |
+| very blind MLP | 61.15 | 2.52 | 57.03 | 0.00 | 0.00 |
+| very blind MLP, no feedback | 61.15 | 2.52 | 57.03 | 0.00 | 0.00 |
+
+Reference on the same storms: always-S1 61.15 · `u`-threshold 66.00 · visible-outage rule 71.32 ·
+oracle 73.68. **The outage rule is only valid in the visible world:** it reads slots 8/12/14, so
+with those hidden it degrades to always-S1 (61.15). Compare the blind gates to 71.32.
+
+Paired by seed (same storms), memory arm minus control:
+
+| comparison | mean diff | seeds GRU wins | per-seed |
+|---|---|---|---|
+| visible | +0.06 | 2/5 | −0.2 −0.3 +0.1 +1.0 −0.3 |
+| blind (both get feedback) | +0.48 | 5/5 | +0.2 0.0 +0.7 +0.1 +1.3 |
+| blind: GRU vs strictly memoryless | +0.28 | 4/5 | +0.3 +0.6 −0.5 +0.1 +1.0 |
+| blind, no feedback either side | +0.35 | 4/5 | +0.3 +0.6 −0.4 +0.6 +0.6 |
+| very blind (both get feedback) | +10.99 | 5/5 | +9.7 +12.6 +8.6 +11.8 +12.3 |
+| very blind: GRU vs strictly memoryless | +10.99 | 5/5 | same |
+
+### 26.4 Reading
+* **Visible: memory is irrelevant**, as expected.
+* **Blind: a small, consistent edge** (+0.3 to +0.5, under half a seed-to-seed std). The GRU also
+  wastes fewer System 2 calls on an intact grid (11% vs 25–29%). Real but modest; not a basis for
+  a headline claim.
+* **Very blind: a large gap, but mostly a training failure of the memoryless gate.** The MLP scored
+  exactly 61.15 on all 5 seeds, identical to always-S1, with S2 rate 0.00: it learned never to
+  escalate. The GRU learned a working policy (72.15). That shows the GRU's hidden state carries
+  useful information, but the +11 is not "11 points of inference".
+* **Open:** the GRU may simply be keeping a *clock* (counting steps) rather than inferring damage.
+  Not yet checked.
+* **Not shown:** that the gate adapts to an unseen storm *within* an episode. That is the actual
+  RL² claim and needs repeated trials of the same storm (`policy.trials_per_task > 1`) — next test.
+
+### 26.5 Caveats
+5 seeds; surrogate twin only; validation storms; hyper-parameters unchanged from §25.
