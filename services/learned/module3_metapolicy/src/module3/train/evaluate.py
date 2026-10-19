@@ -17,6 +17,8 @@ Policies:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import torch
 
@@ -25,6 +27,31 @@ from module3.policy.recurrent_gate import RecurrentGate, build_inputs
 from module3.scenario.cyclone import HAZARD_STAGES
 
 BASELINES = ("always_s1", "always_s2", "threshold", "breaker_rule", "oracle")
+
+
+@dataclass(frozen=True)
+class GateTuning:
+    """Turns the gate's probability of System 2 into a stable decision.
+
+    p2 = P(System 2) from the trained gate. Plain greedy is `p2 > 0.5`. Two refinements:
+      * calibrated threshold - escalate when p2 > tau_on, de-escalate when p2 < tau_off. The
+        defaults (0.5, 0.5) reproduce plain greedy; tau_on > tau_off is hysteresis: the gate
+        needs more evidence to switch System 2 ON than to keep it ON, which stops flickering.
+      * min_hold - after a switch, stay in the new mode at least this many steps.
+    """
+
+    tau_on: float = 0.5
+    tau_off: float = 0.5
+    min_hold: int = 0
+
+    def step(self, p2: float, mode: int, held: int) -> tuple[int, int]:
+        """Return (new_mode, steps_held_in_new_mode). `mode` is the gate's own last request."""
+        if held >= self.min_hold:
+            if mode == 0 and p2 > self.tau_on:
+                return 1, 1
+            if mode == 1 and p2 < self.tau_off:
+                return 0, 1
+        return mode, held + 1
 
 
 def _baseline_action(name: str, obs: np.ndarray, truth_tripped: int, thr_u: float) -> int:
@@ -48,8 +75,12 @@ def run_episode(
     cyclone=None,
     model: RecurrentGate | None = None,
     thr_u: float = 0.4,
+    tuning: GateTuning | None = None,
 ) -> dict:
-    """Play one storm with one policy. Returns the metrics for that storm."""
+    """Play one storm with one policy. Returns the metrics for that storm.
+
+    `tuning` only affects policy "gate" (None = plain greedy argmax, as before).
+    """
     obs, meta = env.reset(seed=seed, options={"cyclone": cyclone})
     h = model.initial_state(1) if model is not None else None
     prev_a, prev_r = 0, 0.0
@@ -59,6 +90,8 @@ def run_episode(
     by_reason = {r: [0, 0] for r in ("none", "value", "sensing", "both")}
     by_damage = {"no_trip": [0, 0], "trip": [0, 0]}  # steps with / without a feeder really out
     truth = 0
+    flips, last_eff = 0, 0
+    mode, held = 0, 10**6
     done = False
     while not done:
         if policy == "gate":
@@ -70,7 +103,12 @@ def run_episode(
             )
             with torch.no_grad():
                 logits, _, h = model(x, h)
-            action = int(torch.argmax(logits[0, 0]).item())
+            if tuning is None:
+                action = int(torch.argmax(logits[0, 0]).item())
+            else:
+                p2 = float(torch.softmax(logits[0, 0], dim=-1)[1])
+                mode, held = tuning.step(p2, mode, held)
+                action = mode
         else:
             action = _baseline_action(policy, obs, truth, thr_u)
         obs, r, _, done, info = env.step(action)
@@ -81,6 +119,8 @@ def run_episode(
         delib += info["reward_parts"]["deliberation"]
         n += 1
         n_s2 += info["effective_action"]
+        flips += int(info["effective_action"] != last_eff)
+        last_eff = info["effective_action"]
         n_reject += int(not info["approved"])
         n_fallback += int(info["budget_exhausted_fallback"])
         n_viol_steps += int(len(info["violating_buses"]) > 0)
@@ -97,6 +137,7 @@ def run_episode(
         "reject_rate": n_reject / n,
         "violation_step_rate": n_viol_steps / n,
         "s2_rate": n_s2 / n,
+        "flips": flips,
         "deliberation_cost": delib,
         "budget_fallbacks": n_fallback,
         "escalation_by_stage": by_stage,
@@ -115,6 +156,7 @@ def aggregate(episodes: list[dict]) -> dict:
         "reject_rate",
         "violation_step_rate",
         "s2_rate",
+        "flips",
         "deliberation_cost",
         "budget_fallbacks",
     )
@@ -147,6 +189,7 @@ def evaluate_policy(
     cyclone=None,
     model: RecurrentGate | None = None,
     thr_u: float = 0.4,
+    tuning: GateTuning | None = None,
 ) -> dict:
-    eps = [run_episode(env, policy, s, cyclone, model, thr_u) for s in seeds]
+    eps = [run_episode(env, policy, s, cyclone, model, thr_u, tuning) for s in seeds]
     return aggregate(eps)

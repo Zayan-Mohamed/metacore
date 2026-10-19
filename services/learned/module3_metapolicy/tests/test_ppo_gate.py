@@ -221,3 +221,37 @@ def test_hide_obs_rejects_a_bad_index():
     cfg["env"]["hide_obs"] = [99]
     with pytest.raises(ValueError):
         CycloneGatingEnv(cfg)
+
+
+# --------------------------------------------------------------- gate tuning (section 27)
+def test_default_tuning_equals_greedy_and_hysteresis_cuts_flips():
+    from module3.train.evaluate import GateTuning
+
+    env = CycloneGatingEnv(_cfg(), rng=np.random.default_rng(0))
+    torch.manual_seed(1)
+    model = RecurrentGate(hidden=16)
+    seeds = list(range(8))
+    greedy = evaluate_policy(env, "gate", seeds, None, model)
+    same = evaluate_policy(env, "gate", seeds, None, model, tuning=GateTuning())
+    assert same["return"] == greedy["return"] and same["flips"] == greedy["flips"]
+    sticky = evaluate_policy(
+        env, "gate", seeds, None, model, tuning=GateTuning(tau_on=0.6, tau_off=0.3, min_hold=3)
+    )
+    assert sticky["flips"] <= greedy["flips"]
+
+
+def test_gate_tuning_state_machine():
+    from module3.train.evaluate import GateTuning
+
+    t = GateTuning(tau_on=0.7, tau_off=0.3, min_hold=2)
+    mode, held = 0, 99
+    mode, held = t.step(0.6, mode, held)  # below tau_on -> stays S1
+    assert mode == 0
+    mode, held = t.step(0.8, mode, held)  # above tau_on -> S2
+    assert mode == 1 and held == 1
+    mode, held = t.step(0.1, mode, held)  # would switch off, but min_hold not reached
+    assert mode == 1
+    mode, held = t.step(0.1, mode, held)  # held >= 2 now -> back to S1
+    assert mode == 0
+    mode, _ = GateTuning(0.7, 0.3, 0).step(0.5, 1, 5)  # between thresholds: stays put
+    assert mode == 1

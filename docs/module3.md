@@ -355,6 +355,11 @@ Meta-RL pipeline is first.
   planner can be tested against the real firewall.
 * **Training stability — FIXED (2026-10-17, §25).** Standardising the critic's target made all 5
   seeds beat the rule in both worlds. Open caveat: the GRU's memory is not shown to help (§25.6).
+* **Latency / thermal / gate tuning — IN PROGRESS (2026-10-19, §27).** Done: measured latency
+  (our side <1 ms p99; real M4 p50 30 ms, p99 48 ms, max 65 ms — over the 50 ms budget), a tested
+  `LatencyGuard` (deadline + circuit breaker, not yet wired in), and gate tuning (no gain: the
+  greedy gate is already stable). Not done: the thermal half (undefined, §27.4); the reward's
+  invented 2/18 ms latency constants need a decision (§27.5).
 * **GRU memory test — RUN (2026-10-19, §26).** With the damage hidden the GRU helps a little
   (blind: +0.3 to +0.5) and a lot when severity is also hidden (the memoryless gate collapses to
   always-S1). Within-storm adaptation (`trials_per_task > 1`) is still untested.
@@ -1109,3 +1114,99 @@ Paired by seed (same storms), memory arm minus control:
 
 ### 26.5 Caveats
 5 seeds; surrogate twin only; validation storms; hyper-parameters unchanged from §25.
+
+---
+
+# Part VI — Latency, deadline enforcement and gate tuning
+
+## 27. Latency profiling, the deadline guard, and gate tuning (2026-10-19)
+
+ClickUp task: *Latency and thermal-budget profiling and enforcement; robust gate tuning
+(hysteresis, calibrated escalation threshold)*. Three parts: **measure** (§27.1), **enforce**
+(§27.2), **tune** (§27.3). The *thermal* half is not done — see §27.4.
+
+### 27.1 Measured latency (code: `scripts/profile_latency.py`)
+One control step = gate forward → System 1 or System 2 plan → verification. Each stage was timed
+with `perf_counter` over simulated storms (single CPU thread, GRU hidden 64). Milliseconds.
+
+| stage | p50 | p95 | p99 | max |
+|---|---|---|---|---|
+| gate forward (GRU, batch 1) | 0.29 | 0.51 | 0.69 | 33.4 (first-call outlier) |
+| System 1 plan | 0.012 | 0.019 | 0.029 | 0.10 |
+| System 2 plan (greedy planner) | 0.021 | 0.068 | 0.101 | 0.43 |
+| surrogate twin evaluate | 0.024 | 0.044 | 0.064 | 0.13 |
+| **real M4 verify, end to end (gateway + HTTP + recompile)** | **30.2** | **46.1** | **48.2** | **65.4** |
+
+System 2 planning by situation (p50 / p99 ms): intact 0.021 / 0.039 · feeder out 0.022 / 0.056 ·
+grid lost 0.075 / 0.136.
+
+**What this says**
+* **Our side is negligible.** Gate + System 1/2 plan together are under 1 ms at p99. The decision
+  is dominated by M4: median 30 ms, p99 48 ms, and the slowest call (65 ms) **exceeds the 50 ms
+  real-time budget**. (Earlier, §21 F5 measured ~13 ms; this run is slower because every call
+  carries the storm overlay commands and the circuit is recompiled each time. Machine load was
+  not controlled, so treat the absolute figure as indicative.)
+* **System 1 vs System 2 is not a latency trade-off today.** The greedy System 2 planner costs
+  ~0.01 ms more than System 1. Both paths then pay the *same* M4 verify cost.
+* **The reward's latency constants are invented and wrong.** `reward.latency_s1_ms = 2` and
+  `latency_s2_ms = 18` are stand-ins; measured planning times are ~0.01 and ~0.02 ms. Today that
+  term (`w_latency · Δms / 50 = 0.016` per System 2 step) is really just a hidden extra
+  deliberation cost. It has NOT been changed here, because changing it would invalidate the
+  results in §25–26; decision for the team (§27.5).
+* **MDP vs SMDP (§2.1) is settled for now:** System 2 takes ≈0.02 ms against a control period
+  of tens of ms, so the fixed-step MDP stands. This must be re-measured if System 2 becomes an
+  optimiser or runs OpenDSS in the loop.
+
+### 27.2 Enforcement: `LatencyGuard` (code: `src/module3/serve/guard.py`)
+A late plan is a wrong plan in real time. The guard wraps the System 2 call:
+1. **Deadline** — if System 2's plan takes longer than `s2_deadline_ms` (default 5 ms), its
+   answer is discarded and the System 1 plan is used for that step.
+2. **Circuit breaker** — after `trip_after` (3) overruns in a row, System 2 is switched off for
+   `cooldown_steps` (10) steps and then retried. This protects the *following* steps; a Python
+   call cannot be interrupted half-way, so the guard bounds the damage rather than pre-empting it.
+3. **Time budget** — System 2 is refused up front if the time already spent this step leaves less
+   than `s2_deadline_ms` before `step_deadline_ms` (50 ms).
+
+It uses an injectable clock, so the 7 tests in `tests/test_latency_guard.py` are exact (deadline,
+breaker open/close, streak reset, time-budget refusal, summary counts).
+**Limit:** the guard protects against a slow *System 2*. It cannot speed up M4, which is where
+the real tail (§27.1) is — that is an M4 fix (F5).
+**Not yet wired** into the serving path (the Go `gating_decision_svc` is still a stub); it is a
+tested component, not an integrated one.
+
+### 27.3 Gate tuning: calibrated threshold and hysteresis (code: `scripts/tune_gate.py`, `train/evaluate.py::GateTuning`)
+No retraining: the saved §25.6 gates (shortage world, 5 seeds) output P(System 2). Per seed, a
+grid of rules was searched on **validation** storms, then the winner scored on the final-report
+storms. `flips` = System 1 ↔ System 2 switches per storm.
+
+| rule | fresh storms: return | flips / storm | S2 rate | S2 on intact grid |
+|---|---|---|---|---|
+| greedy (P > 0.5) | 73.32 ± 0.92 | 1.1 ± 0.2 | 0.38 | 0.09 |
+| calibrated threshold | 73.37 ± 0.91 | 1.1 ± 0.2 | 0.38 | 0.08 |
+| hysteresis (on/off thresholds + hold) | 73.36 ± 0.90 | 1.0 ± 0.2 | 0.37 | 0.07 |
+| *held-out `ditwah_like`: greedy / calibrated / hysteresis* | 71.33 / 71.33 / 71.30 | 1.0 / 1.0 / 1.0 | | |
+
+**Reading: tuning changes nothing.** The differences (+0.05) are far inside the seed-to-seed
+spread (0.9). The gate already switches about once per storm (on at the outage, rarely off), so
+there is no chatter for hysteresis to remove, and P = 0.5 is already about the best threshold.
+The chosen thresholds vary by seed (0.4–0.7) without a pattern, which is what you see when the
+return surface is flat. **Decision: keep plain greedy as the default**; `GateTuning` stays as an
+opt-in option, to be revisited if a harder setting (noisier telemetry, a real System 2) makes the
+gate chatter. The greedy row reproduces the §25.6 numbers exactly, a consistency check on the
+evaluation.
+
+### 27.4 What is NOT done: "thermal"
+The task says *thermal-budget*, and the repo does not define it. Two readings:
+* **Line thermal loading** (current ≤ ampacity; M4 reports `THERMAL_OVERLOAD`). The surrogate has
+  no thermal model (F8), so System 2's dispatch is never checked against line limits during
+  training. Doing this properly needs a flow estimate per line, or the real M4 in the loop.
+* **Compute heat** on the edge device (duty-cycle limit on System 2). Not measurable on this
+  machine.
+Nothing was built for either; the choice is the owner's (§27.5).
+
+### 27.5 Decisions needed
+1. **Reward latency constants:** set to the measured ~0.01/0.02 ms (the term vanishes, retrain and
+   re-run §25–26), or keep 2/18 ms and relabel it as a deliberation-cost component?
+2. **Thermal:** which reading of §27.4, and is a surrogate approximation enough for PP1?
+3. **M4 tail latency:** p99 48 ms / max 65 ms through the gateway is over the 50 ms budget —
+   raise with the M4 owner (F5: snapshot/restore instead of recompiling).
