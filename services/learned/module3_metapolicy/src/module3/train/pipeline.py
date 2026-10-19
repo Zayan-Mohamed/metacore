@@ -62,7 +62,13 @@ def _train(
         log(f"  warm start: copies '{wcfg.teacher}' on {agree:.0%} of steps")
         bc_snapshot = deepcopy(model)
     hist = train_gate(
-        env, model, PPOConfig.from_dict(cfg["ppo"]), int(pol.get("trials_per_task", 1)), seed, log
+        env,
+        model,
+        PPOConfig.from_dict(cfg["ppo"]),
+        int(pol.get("trials_per_task", 1)),
+        seed,
+        log,
+        str(pol.get("replay", "fresh")),
     )
     return model, hist, bc_snapshot
 

@@ -61,12 +61,16 @@ def collect_tasks(
     n_tasks: int,
     trials_per_task: int,
     rng: np.random.Generator,
+    replay: str = "fresh",
 ) -> dict:
     """Run the gate through `n_tasks` storms. Returns tensors shaped (n_tasks, L, ...).
 
     A *task* is one storm (its parameters). With `trials_per_task` > 1 the SAME storm
-    parameters are replayed (with fresh randomness) and the GRU memory is carried across
-    those trials — the RL^2 'multiple trials per task' setting.
+    parameters are replayed and the GRU memory is carried across those trials — the RL^2
+    'multiple trials per task' setting. `replay` says what repeats:
+      "fresh"  same parameters, new random damage each trial (what is shared is only the
+               storm's character, e.g. wind and how fragile the network is)
+      "exact"  the identical storm, damage and timing included (a rehearsal / replay)
     """
     inputs, actions, logps, values, rewards = [], [], [], [], []
     for _ in range(n_tasks):
@@ -74,8 +78,11 @@ def collect_tasks(
         h = model.initial_state(1)
         prev_a, prev_r, done_flag = 0, 0.0, 0.0
         ti, ta, tl, tv, tr = [], [], [], [], []
+        # drawn only for "exact", so the random stream of the default setting is unchanged
+        task_seed = int(rng.integers(0, 2**31 - 1)) if replay == "exact" else None
         for _trial in range(trials_per_task):
-            obs, _ = env.reset(seed=int(rng.integers(0, 2**31 - 1)), options={"cyclone": params})
+            trial_seed = task_seed if task_seed is not None else int(rng.integers(0, 2**31 - 1))
+            obs, _ = env.reset(seed=trial_seed, options={"cyclone": params})
             done = False
             while not done:
                 x = build_inputs(
@@ -189,6 +196,7 @@ def train_gate(
     trials_per_task: int,
     seed: int,
     log=print,
+    replay: str = "fresh",
 ) -> list[dict]:
     """Full PPO training loop. Returns one log row per update."""
     rng = np.random.default_rng(seed)
@@ -204,7 +212,7 @@ def train_gate(
             if cfg.ent_coef_final is not None
             else cfg
         )
-        batch = collect_tasks(env, model, cfg.tasks_per_update, trials_per_task, rng)
+        batch = collect_tasks(env, model, cfg.tasks_per_update, trials_per_task, rng, replay)
         stats = ppo_update(model, opt, batch, ucfg, rng, train_actor=u >= cfg.critic_warmup_updates)
         row = {
             "update": u + 1,

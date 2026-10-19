@@ -24,7 +24,7 @@ import torch
 
 from module3.env.cyclone_env import CycloneGatingEnv
 from module3.policy.recurrent_gate import RecurrentGate, build_inputs
-from module3.scenario.cyclone import HAZARD_STAGES
+from module3.scenario.cyclone import HAZARD_STAGES, sample_params
 
 BASELINES = ("always_s1", "always_s2", "threshold", "breaker_rule", "oracle")
 
@@ -180,6 +180,55 @@ def aggregate(episodes: list[dict]) -> dict:
         vals[i] <= vals[i + 1] + 1e-9 for i in range(len(vals) - 1)
     )
     return out
+
+
+@torch.no_grad()
+def run_trials(
+    env: CycloneGatingEnv,
+    model: RecurrentGate,
+    task_seed: int,
+    n_trials: int,
+    replay: str = "fresh",
+) -> list[dict]:
+    """Play ONE storm (task) `n_trials` times in a row, carrying the gate's memory across trials.
+
+    Mirrors training (`ppo.collect_tasks`): memory, previous action and previous reward persist,
+    and the first step of each later trial sees trial_done = 1. Greedy actions. Returns, per
+    trial, the return plus the same storm played by two memoryless references (always System 1
+    and the oracle) so the gate can be judged against what was achievable on that very trial.
+    """
+    rng = np.random.default_rng(task_seed)
+    params = sample_params(rng, env._scenario_cfg)
+    seeds = [
+        task_seed if replay == "exact" else int(rng.integers(0, 2**31 - 1))
+        for _ in range(n_trials)
+    ]
+    h = model.initial_state(1)
+    prev_a, prev_r, done_flag = 0, 0.0, 0.0
+    rows = []
+    for k, s in enumerate(seeds):
+        obs, _ = env.reset(seed=s, options={"cyclone": params})
+        ret, n_s2, n, done = 0.0, 0, 0, False
+        while not done:
+            x = build_inputs(
+                torch.as_tensor(obs, dtype=torch.float32).view(1, 1, -1),
+                torch.tensor([[prev_a]]),
+                torch.tensor([[prev_r]], dtype=torch.float32),
+                torch.tensor([[done_flag]], dtype=torch.float32),
+            )
+            logits, _, h = model(x, h)
+            a = int(torch.argmax(logits[0, 0]).item())
+            obs, r, _, done, info = env.step(a)
+            prev_a, prev_r, done_flag = a, float(r), 0.0
+            ret += r
+            n_s2 += info["effective_action"]
+            n += 1
+        done_flag = 1.0
+        ref = {
+            p: run_episode(env, p, s, params)["return"] for p in ("always_s1", "oracle")
+        }
+        rows.append({"trial": k + 1, "return": ret, "s2_rate": n_s2 / n, **ref})
+    return rows
 
 
 def evaluate_policy(

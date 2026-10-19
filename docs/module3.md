@@ -362,7 +362,11 @@ Meta-RL pipeline is first.
   invented 2/18 ms latency constants need a decision (§27.5).
 * **GRU memory test — RUN (2026-10-19, §26).** With the damage hidden the GRU helps a little
   (blind: +0.3 to +0.5) and a lot when severity is also hidden (the memoryless gate collapses to
-  always-S1). Within-storm adaptation (`trials_per_task > 1`) is still untested.
+  always-S1).
+* **Repeated-trials test — RUN (2026-10-19, §28). Negative.** Trained and tested on 4 plays of the
+  same storm, the GRU does not improve from play 1 to play 4 (fresh damage +0.4 ± 6.1; identical
+  replay −1.5 ± 1.4), and the memoryless gate scores higher in this setup. No evidence of
+  within-storm meta-learning.
 * **Meta-RL pipeline — BUILT, READY FOR DEV REVIEW (2026-10-17).** Pushed on `m3/gate-policy`; no
   PR opened; ClickUp has no "PR review by dev" status yet. PPO + GRU (RL²) gate, simulated
   cyclones with four disturbances, physical priority-weighted reward, surrogate-trained /
@@ -1240,3 +1244,68 @@ caller sees.
 
 **Caveat.** The earlier §21 F5 figure was ~13 ms; the difference is not yet explained (storm
 overlay commands, load on the machine). A re-measurement on a quiet machine would settle it.
+
+---
+
+# Part VII — Repeated trials
+
+## 28. Repeated-trials test: does the GRU improve the more it sees of a storm? (2026-10-19)
+
+ClickUp task: Meta-RL gate (z8py7aaz6y). Code: `scripts/trials_test.py`,
+`train/evaluate.py::run_trials`, `policy.replay` in `train/ppo.py::collect_tasks`.
+Raw results: `artifacts/trials_test/latest.json` (git-ignored).
+
+**Question.** §26 showed the GRU's hidden state carries information *within* a storm. The RL² claim
+is stronger: given several trials of the *same* task and memory kept across them, the policy gets
+better by trial K. A memoryless gate cannot improve across trials, so it is the control.
+
+**Setup.** Blind world (SCADA slots 12–14 hidden, 60% of storms lose the main supply). Each storm
+is played 4 times in a row; the GRU keeps hidden state, previous action and previous reward across
+trials (the first step of a later trial sees `trial_done = 1`). Both gates are *trained* the same
+way (4 trials per task). Control: MLP with no previous-action/reward feedback (strictly
+memoryless). Two kinds of repetition: `fresh` (same storm settings, damage redrawn each trial) and
+`exact` (the identical storm replayed). 5 seeds × 2 architectures × 2 modes, 40 evaluation storms
+per run on the validation storm range, greedy actions.
+
+**Result** (mean return per trial index; always-S1 and the oracle are scored on the same trials):
+
+| mode | arm | trial 1 | trial 2 | trial 3 | trial 4 | last − first |
+|---|---|---|---|---|---|---|
+| fresh | GRU | 68.25 | 68.75 | 68.59 | 68.62 | +0.37 ± 6.14 |
+| fresh | MLP, no feedback | 71.07 | 71.15 | 71.36 | 71.25 | +0.18 ± 0.54 |
+| fresh | always-S1 / oracle | 61.08 | 59.59 | 59.86 | 60.96 | oracle ≈ 73.8 |
+| exact | GRU | 69.45 | 69.81 | 70.36 | 67.96 | −1.49 ± 1.43 |
+| exact | MLP, no feedback | 70.90 | 70.90 | 70.90 | 70.90 | 0 (by construction) |
+| exact | always-S1 / oracle | 62.44 | 62.44 | 62.44 | 62.44 | oracle 73.99 |
+
+GRU improvement minus MLP improvement: +0.19 (fresh; GRU larger on 3/5 seeds), −1.49 (exact; 0/5).
+
+**Reading: no evidence of within-storm meta-learning. Negative result.**
+* Fresh damage: the average gain is +0.4 with a seed-to-seed spread of 6.1, i.e. noise. Per seed the
+  GRU improved on 3 seeds (e.g. 65.0 → 71.9) and got *worse* on 2 (66.9 → 61.0; 72.1 → 66.0).
+* Identical replay is the easiest case for learning a storm (the same damage every time), and the
+  GRU did not exploit it: it rose on trials 1–3 on average, then fell at trial 4 (4 of 5 seeds
+  lowest or near-lowest at trial 4). Two seeds were flat, one collapsed to 64 from the start.
+* **The GRU's behaviour drifts with trial number.** On several seeds its System 2 rate climbs
+  steadily across trials (e.g. 0.16 → 0.30 → 0.54 → 0.56) while the storm is identical. A policy
+  whose actions change with no new information about the storm is behaving like a *trial counter*
+  (a clock), not a learner. That was the unchecked suspicion listed after §26; this is the first
+  evidence for it, but it is not a direct test.
+* The memoryless gate is simply **better and steadier here** (71.07 vs 68.25 on trial 1, fresh).
+  Training the GRU over 320-step sequences is harder and less stable than the MLP over 80.
+
+**What this does and does not say.** It does not show the GRU is useless: §26 stands (its memory
+helps when information is hidden *within* a storm). It shows that, in this environment, a storm
+repeated 4 times gives the GRU nothing it learns to use. Likely reasons, not yet tested: with
+`fresh` damage there is little shared across trials beyond the storm settings, which the gate can
+mostly infer from what it sees; with `exact` there is something to memorise, but PPO with 120
+updates and a 4× longer horizon may simply not find it.
+
+**Consequences for the claim.** Do not describe the M3 gate as "meta-learning within a storm" in
+the PP1 deliverable. Defensible wording: *a recurrent gate that uses history to infer hidden storm
+state (§26)*; RL²-style adaptation across repeated trials was tested and **not** observed (§28).
+
+**Possible follow-ups (not done):** a direct clock test (feed the trained GRU a constant storm
+state and read how its output depends on step index); more updates or a curriculum from 1 to 4
+trials; a task latent that is hidden, persistent and decision-relevant (e.g. which feeder is
+fragile), which is what RL² needs to have something to infer.
