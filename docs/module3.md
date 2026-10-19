@@ -363,6 +363,9 @@ Meta-RL pipeline is first.
 * **GRU memory test — RUN (2026-10-19, §26).** With the damage hidden the GRU helps a little
   (blind: +0.3 to +0.5) and a lot when severity is also hidden (the memoryless gate collapses to
   always-S1).
+* **PP1 pack — WRITTEN (2026-10-19, §30).** Checklist, headline metrics, a new real-M4 check of all
+  five final gates (surrogate agrees to within 0.5 return; gate next to the oracle), a verified demo
+  runbook, what not to claim, and who has to act before PP1.
 * **Cyclone lab dashboard page — BUILT (2026-10-19, §29).** `/cyclone` in the dashboard: set the
   storm's parameters (or pick a preset / random storm), play it through a trained gate and the
   baselines, read the timeline. Not yet the live-M4 or the deliberation-cost view.
@@ -1367,3 +1370,146 @@ Example (storm seed 1, `ditwah_like`, gate seed 0): gate 75.30 vs outage rule 72
 **Not covered (still open on the timeline task):** the *deliberation cost incurred* is only
 visible through the reward lane (no separate cost trace); no live-M4 mode; no dashboard control
 for the gate's tuning options (§27.3) or the latency guard.
+
+---
+
+# Part IX — PP1 deliverable
+
+## 30. PP1 pack: what M3 delivers, the numbers, the demo, and what we do not claim (2026-10-19)
+
+ClickUp: *PP1 deliverable: working gating engine + System 2 policy at ~50% with metrics and live
+demo* (z8py7aaz73). The roadmap's PP1 line is "four core engines with measured metrics;
+forward-direction contracts frozen and live". This section is the M3 evidence for that line, written
+so that every number points at the section that produced it.
+
+### 30.1 PP1 checklist: criterion → evidence → status
+
+| PP1 needs | Evidence | Status |
+|---|---|---|
+| A working gating engine | PPO + GRU gate trained on simulated cyclones with four disturbances and a priority-weighted physical reward (Part II, §14–§20); 5 seeds, stable after the critic fix (§25) | **Done** |
+| A System 2 policy | Critical-load ranking + shortage-aware shedding planner, with an islanded model in the surrogate (§23) | **Done in the surrogate.** Not testable on the real M4 until M4 can represent a lost main supply (§24, **unsent**) |
+| Measured metrics | Return, load served, reject rate, System 2 share, S2 use by damage state, vs five baselines, 5 seeds, fresh and held-out storms (§25.6, table below) | **Done** |
+| Measured on the real firewall | All five final gates scored on the real M4 and on the surrogate, same storms (§30.2 below) | **Done** for storms without grid loss |
+| Latency measured | Our side < 1 ms p99; real M4 p50 30 ms, p99 48 ms, max 65 ms vs 50 ms budget (§27.1) | **Done**; M4's tail is over budget (note to M4 drafted, §27.6, unsent) |
+| Live demo | Dashboard **Cyclone lab** (§29) + runbook in §30.3 | **Done**, runs offline on the surrogate |
+| Forward contracts frozen and live | M3 → M4 contract `m3-out/0.1` is defined and used by the older demo (§9); the Meta-RL gate talks to M4 over the HTTP verify endpoint through the gateway | **Partial.** The Go `gating_decision_svc` is still a stub; M2 → M3 still uses a mock stream (ClickUp z8py7aaz6z, blocked on M2) |
+
+### 30.2 Headline metrics
+
+Return per 80-step storm, higher is better; mean ± std over 5 independent training seeds;
+identical storms for every policy; fresh storms not used to pick the recipe. **Surrogate twin.**
+
+| world | policy | fresh storms | held-out `ditwah_like` | held-out `burevi_like` |
+|---|---|---|---|---|
+| shortage (60% lose main supply) | always System 1 | 61.19 ± 0.86 | 54.05 ± 3.89 | 64.24 ± 4.53 |
+| | `u` threshold | 65.28 ± 1.40 | 63.72 ± 0.84 | 66.11 ± 3.50 |
+| | visible-outage rule | 71.02 ± 1.21 | 65.14 ± 0.96 | 73.00 ± 0.33 |
+| | **gate** | **73.32 ± 0.92** | **71.33 ± 0.75** | **73.53 ± 0.69** |
+| | oracle (reads the true damage) | 73.49 ± 0.85 | 71.17 ± 0.58 | 74.11 ± 0.56 |
+| original (no main-supply loss) | visible-outage rule | 72.26 ± 0.80 | 67.59 ± 0.62 | 75.03 ± 0.64 |
+| | **gate** | **74.57 ± 0.40** | **73.54 ± 0.45** | **75.90 ± 0.34** |
+
+The gate beats the best rule on fresh storms in both worlds on **all five seeds**, by about 2 points
+on fresh storms and about 6 on held-out `ditwah_like`. It escalates to System 2 on 9% of
+intact-grid steps (38% before the fix). Full tables: §25.6.
+
+**Real-M4 check (new, `scripts/live_check.py`, `artifacts/live_check/latest.json`).** The five final
+gates and the baselines were scored on the real M4 firewall and on the surrogate, same storms (8
+random + 4 per held-out profile per seed; storms **without** grid loss, which the real M4 cannot
+represent; about 39,800 real verify calls):
+
+| suite | policy | real M4 | surrogate | gap | largest per-seed gap | real-M4 reject rate |
+|---|---|---|---|---|---|---|
+| random | always System 1 | 68.84 | 68.84 | +0.000 | 0.000 | 0.368 |
+| random | visible-outage rule | 72.10 | 71.91 | +0.189 | 0.491 | 0.196 |
+| random | **gate** | **74.61** | 74.42 | +0.189 | 0.491 | 0.055 |
+| random | oracle | 74.85 | 74.66 | +0.189 | 0.491 | 0.044 |
+| `burevi_like` | rule / **gate** / oracle | 75.26 / **75.87** / 76.96 | 75.20 / 75.81 / 76.90 | +0.060 | 0.301 | gate 0.017 |
+| `ditwah_like` | rule / **gate** / oracle | 67.83 / **73.76** / 73.92 | identical | 0.000 | 0.000 | gate 0.036 |
+
+(Other baselines: `results` file.) **Reading:** the surrogate we train on agrees with the real
+firewall to within 0.5 return on any seed (about 0.2 on average), the policy ranking is the same on
+both, and on the real M4 the gate again sits next to the oracle and about 2.5 (random) / 6
+(`ditwah_like`) above the rule. The real M4 scores slightly *higher* than the surrogate where they
+differ, so the surrogate is the more pessimistic of the two. Caveats: storms with grid loss are not
+covered (the real M4 cannot represent them); each cell is 8 or 4 storms per seed.
+
+**Latency (§27.1):** gate + System 1/2 planning < 1 ms at p99; real M4 verify p50 30 ms / p99 48 ms /
+max 65 ms against the 50 ms budget. **Tests:** 89 in the M3 package (stability, memory knobs, guard,
+storm service, repeated trials) plus the gateway wiring tests.
+
+### 30.3 Live demo runbook (all steps verified on this machine)
+
+Needs the trained gates in `artifacts/pipeline/final_islanded/` (**not in git**; see §30.5).
+
+```bash
+# terminal 1 — gateway, from services/gateway, workspace venv (needs torch)
+../../.venv/Scripts/python.exe -m uvicorn gateway.main:app --port 8000
+# terminal 2 — dashboard, from apps/dashboard
+node_modules/.bin/vite --port 5173        # open http://localhost:5173/cyclone
+```
+
+A five-minute story that matches the evidence:
+1. **The problem (30 s).** A cyclone damages the grid. Deliberating (System 2) costs compute and
+   budget; reacting (System 1) is cheap but can be wrong. The gate decides which, step by step.
+2. **Mild storm (60 s).** Peak wind 40 km/h, seed 1. The gate stays on System 1 throughout (return 79.64);
+   *always System 2* scores 76.79: it spends budget for nothing.
+3. **`ditwah_like` preset (90 s).** Hover the step where the first feeders trip: the gate's P(S2)
+   jumps from ~0 to ~1 within a few steps of the damage, and System 2 stays on. Show the table:
+   gate 75.3 vs outage rule 72.2 vs always-S1 69.9 (storm seed 1, gate 0).
+4. **Main supply cut (60 s).** Start from `ditwah_like`, raise "Main supply cut" to 1.0 and run (seed 1): gate
+   74.33, oracle 74.28, outage rule 71.12, always-S1 39.47. The planner sheds the lowest-priority
+   loads first (§23). Say plainly this is the surrogate twin.
+5. **Random storm (30 s).** Click it a few times. Say: one storm is one sample, the averages are
+   the table in §30.2.
+6. **Close (30 s).** Real-M4 agreement and latency numbers from §30.2.
+
+### 30.4 What we claim, and what we do not
+
+**Claim (supported):**
+* A learned gate that escalates to System 2 almost exactly when real damage exists, matching an
+  oracle that reads the true damage and beating the best visible-outage rule on fresh and held-out
+  storms, on all five seeds (§25.6, §30.2).
+* The surrogate we train on agrees with the real M4 firewall (§30.2, §17).
+* Our decision path costs under 1 ms; M4 dominates latency (§27.1).
+
+**Do not claim:**
+* **Meta-learning / memory.** The memoryless gate scores the same (§25.6). The GRU's memory helps a
+  little when damage is hidden within a storm (§26), and it did **not** improve across repeated
+  plays of the same storm (§28). Say "a recurrent gate that uses history to infer hidden state".
+* **Survivability on Burevi or Ditwah.** Both profiles are placeholder parameter sets (§10, §21).
+* **Real-M4 verification of the shortage scenario.** M4 cannot represent a lost main supply yet (§24).
+* **That latency is a trade-off the gate manages.** System 2 plans in ~0.02 ms; the reward's
+  "latency" term is a relabelled deliberation cost, not measured time (§27.5).
+* **A thermal budget.** Not defined, not built (§27.4).
+
+### 30.5 Open items going into PP1 (who has to act)
+
+| Item | Owner | Why it matters for PP1 |
+|---|---|---|
+| Send the "main supply lost" change request (§24) | Saabir → Hariswara | Without it System 2's shortage logic stays surrogate-only |
+| Send the M4 tail-latency note (§27.6) | Saabir → Hariswara | M4 p99 / max exceed the 50 ms budget |
+| Define "thermal" (§27.4) | Saabir | Half of the latency/thermal task is unbuilt |
+| Commit or publish the five gate checkpoints (~110 KB each) | Saabir | The demo and the Cyclone lab page need them; a fresh clone has none |
+| Add a "PR review by dev" ClickUp status; open the PR into `main` (do not merge) | Saabir | The Meta-RL work is on `m3/gate-policy` only |
+| Swap the mock M2 stream for the real one | M2 owner (z8py7aaz6z) | PP1 asks for live forward contracts |
+| Replace the placeholder Burevi/Ditwah profiles with real data | Saabir | Needed before any survivability claim (PP2) |
+| Wire the latency guard into serving; the Go `gating_decision_svc` is a stub | Saabir | Guard is tested but not integrated |
+
+### 30.6 Questions a panel is likely to ask, and the honest answer
+
+* **"Is the gate just a rule?"** A rule on visible outages gets 71.0 and the gate 73.3 (shortage
+  world, fresh storms); on held-out `ditwah_like` the gap is 6 points. It also wastes little
+  System 2: it escalates on 9% of intact-grid steps (38% before the fix).
+* **"Why is it as good as the oracle?"** The gate is *given* outage status in the observation
+  (slots 12–14), so this is not a hard inference problem; the oracle is a rule, not an optimum, and
+  the gate can edge past it (§25.4). Hiding those slots costs a little (§26).
+* **"Did you train on the same storms you report?"** No: validation storms chose the recipe,
+  reported storms are fresh (§25.6), and two storm profiles are held out.
+* **"Why only one seed in the live test before?"** It now covers all five seeds (§30.2).
+* **"Is it meta-RL?"** It is trained with PPO and a recurrent policy in the RL² style; we tested for
+  adaptation across repeated storms and did not find it (§28). MAML is documented and not used (§15).
+* **"Why do the reward's latency numbers say 2 ms and 18 ms?"** They are a deliberation-cost
+  weighting, not measurements (§27.5).
+* **"Does it work on the real firewall?"** Yes for storms without a lost main supply (§30.2); the
+  shortage scenario waits on M4 (§24).
