@@ -8,7 +8,8 @@
  * The feature vector shown here is assembled by the gateway from the offline
  * calibration artifacts (services/learned/module1_state_forecasting, via
  * gateway routers/module1.py → module1.assemble). The learned 64-d node_embedding
- * is a zero placeholder — the ST-GNN encoder that would fill it does not exist yet.
+ * is left as zeros on this path: the ST-GNN v0.1 encoder that fills it runs on the forecast path
+ * (module1.infer.forecast, the /vulnerability page).
  * When the gateway is unreachable the page falls back to built-in representative
  * values, and the badge says so.
  *
@@ -340,7 +341,7 @@ export default function AgentStateRoute() {
     {
       label: "Embedding dim",
       value: String(EMBEDDING_DIM),
-      note: view.hasEmbedding ? "learned per-node width" : "reserved — encoder not built",
+      note: view.hasEmbedding ? "learned per-node width" : "zeros here — ST-GNN fills it on /vulnerability",
     },
     { label: "Schema", value: `v${SCHEMA_VERSION}`, note: "module1_state_v1" },
   ];
@@ -367,7 +368,7 @@ export default function AgentStateRoute() {
                 {isLive ? (
                   <span
                     className="agent-state__badge agent-state__badge--live"
-                    title="node_features assembled by module1.assemble from the offline calibration artifacts. node_embedding is still a zero placeholder."
+                    title="node_features assembled by module1.assemble from the offline calibration artifacts. node_embedding is zeros on this path; the ST-GNN v0.1 forecaster fills it (see /vulnerability)."
                   >
                     live · {sourceRoot}
                   </span>
@@ -566,8 +567,8 @@ export default function AgentStateRoute() {
               calibration artifacts (real <span className="mono">data/</span> or the{" "}
               <span className="mono">.synthetic/</span> stand-in). The electrical group is
               QUALITY_MISSING because the offline path has no power-flow simulator — the runtime
-              simulator fills it per step. node_embedding is a zero placeholder; the ST-GNN encoder
-              that fills it does not exist yet.
+              simulator fills it per step. node_embedding is zeros on this path: the ST-GNN v0.1
+              forecaster that fills it runs on the forecast path (the vulnerability page).
             </li>
             <li>
               <b>Spatial degeneracy.</b> One irradiance series and two wind series cover all four
