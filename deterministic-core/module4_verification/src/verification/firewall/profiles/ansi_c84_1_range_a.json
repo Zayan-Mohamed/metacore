@@ -1,0 +1,11 @@
+{
+  "profile_id": "ANSI-C84.1-A",
+  "version": 1,
+  "title": "ANSI C84.1 Range A, service voltage",
+  "v_min_pu": 0.95,
+  "v_max_pu": 1.05,
+  "thermal_overload_margin": 0.0,
+  "statistic": "Range A service voltage, normal conditions; M4 applies the band to each solved state",
+  "source": "ANSI C84.1, Electric Power Systems and Equipment - Voltage Ratings (60 Hz), Range A",
+  "note": "Range A service voltage is +/-5 % of nominal. Used for comparison only; the islands run at 50 Hz, 400 V."
+}

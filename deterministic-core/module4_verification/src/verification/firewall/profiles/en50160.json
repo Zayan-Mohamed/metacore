@@ -1,0 +1,11 @@
+{
+  "profile_id": "EN-50160",
+  "version": 1,
+  "title": "EN 50160 supply voltage variation",
+  "v_min_pu": 0.9,
+  "v_max_pu": 1.1,
+  "thermal_overload_margin": 0.0,
+  "statistic": "standard: 95 % of 10-minute mean r.m.s. values within +/-10 % over a week; M4 applies the band to each hourly solved state",
+  "source": "EN 50160, Voltage characteristics of electricity supplied by public distribution networks",
+  "note": "An hourly state is a coarser average than the standard's 10-minute means, so this is a proxy, not a compliance claim."
+}

@@ -1,0 +1,11 @@
+{
+  "profile_id": "METACORE-STRICT",
+  "version": 1,
+  "title": "MetaCore strict operating band",
+  "v_min_pu": 0.95,
+  "v_max_pu": 1.05,
+  "thermal_overload_margin": 0.0,
+  "statistic": "every bus, every solved state",
+  "source": "MetaCore safety specification v1.0 (M4's limits before profiles existed)",
+  "note": "The default. Tighter than or equal to every standard below, so a STRICT approval is also an approval under each of them."
+}

@@ -1,8 +1,10 @@
 # M1 -> M4 topology v1 (draft): review note for Module 4
 
-**Status:** DRAFT for joint sign-off (Zayan, M1 / Hariswara, M4). Nothing in this change alters
-M4's default behaviour: `CircuitTwin()` still compiles `delft_3island.dss`, and
-`PhysicsVerifier.verify(action)` without a snapshot is unchanged. The new model is opt-in.
+> **Update (M4 risk-certified verification, ADR 0005):** M4 now runs on `northern-islands-v1`
+> by default (items 1, 3 and 4 below are done on M4's side: new bus names, a generation-adequacy
+> limit, the default switched and `delft_3island.dss` retired). M3's names are still M3's change.
+
+**Status:** DRAFT for joint sign-off (Zayan, M1 / Hariswara, M4).
 
 ## Why
 

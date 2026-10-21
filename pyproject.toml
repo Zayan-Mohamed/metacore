@@ -70,5 +70,6 @@ pythonpath = [
   "services/learned/module2_auq_engine/src",
   "services/learned/module3_metapolicy/src",
   "deterministic-core/module4_verification/src",
+  "deterministic-core/module4_verification",  # its tests import evaluation/ from the module root
   "deterministic-core/module4_semantic_translation/src",
 ]

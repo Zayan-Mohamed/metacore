@@ -7,11 +7,17 @@
 //
 // DETERMINISTIC. The verdict is produced by an OpenDSS power-flow solve against a safety
 // specification. Nothing in the decision path is learned.
+//
+// v1.1 (additive only): the UNVERIFIED decision, the generation-adequacy violation, the M1
+// snapshot and limit profile on the request, and the risk certificate and Shapley risk
+// attribution on the verdict. Every v1.0 field keeps its number and meaning, so a v1.0 reader
+// parses a v1.1 verdict (it sees UNVERIFIED as the unknown enum value 3: not an approval).
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { Envelope, HealthSchema, ScenarioRef } from "./common_pb";
 import type { ProposedControlAction } from "./module3_pb";
+import type { GridStateSnapshot } from "./module1_pb";
 
 /**
  * Describes the file verification.proto.
@@ -36,6 +42,21 @@ export declare type VerificationRequest = Message<"metacore.verification.v1.Veri
    * @generated from field: string topology_id = 3;
    */
   topologyId: string;
+
+  /**
+   * v1.1: the hour the action is judged on. Without it the risk certificate cannot be issued
+   * and the verdict is UNVERIFIED.
+   *
+   * @generated from field: metacore.module1.v1.GridStateSnapshot snapshot = 4;
+   */
+  snapshot?: GridStateSnapshot | undefined;
+
+  /**
+   * e.g. "METACORE-STRICT"; empty -> the default profile
+   *
+   * @generated from field: string limit_profile = 5;
+   */
+  limitProfile: string;
 };
 
 /**
@@ -86,6 +107,36 @@ export declare type VerificationVerdict = Message<"metacore.verification.v1.Veri
    * @generated from field: string network_model_version = 7;
    */
   networkModelVersion: string;
+
+  /**
+   * v1.1
+   *
+   * unset for a Check A rejection
+   *
+   * @generated from field: metacore.verification.v1.RiskCertificate certificate = 8;
+   */
+  certificate?: RiskCertificate | undefined;
+
+  /**
+   * empty when no scenario failed
+   *
+   * @generated from field: repeated metacore.verification.v1.RiskAttribution attribution = 9;
+   */
+  attribution: RiskAttribution[];
+
+  /**
+   * versioned, e.g. "METACORE-STRICT-v1"
+   *
+   * @generated from field: string limit_profile = 10;
+   */
+  limitProfile: string;
+
+  /**
+   * why, when decision is UNVERIFIED
+   *
+   * @generated from field: repeated string unverified_reasons = 11;
+   */
+  unverifiedReasons: string[];
 };
 
 /**
@@ -93,6 +144,203 @@ export declare type VerificationVerdict = Message<"metacore.verification.v1.Veri
  * Use `create(VerificationVerdictSchema)` to create a new message.
  */
 export declare const VerificationVerdictSchema: GenMessage<VerificationVerdict>;
+
+/**
+ * v1.1. Check B: k of N seeded scenarios of the next hours broke a limit, with exact
+ * Clopper-Pearson bounds on the true rate. Holds everything a replay needs and nothing
+ * time-dependent, so the same input gives the same bytes.
+ *
+ * @generated from message metacore.verification.v1.RiskCertificate
+ */
+export declare type RiskCertificate = Message<"metacore.verification.v1.RiskCertificate"> & {
+  /**
+   * @generated from field: metacore.verification.v1.Decision decision = 1;
+   */
+  decision: Decision;
+
+  /**
+   * @generated from field: uint32 n_scenarios = 2;
+   */
+  nScenarios: number;
+
+  /**
+   * @generated from field: uint32 n_max = 3;
+   */
+  nMax: number;
+
+  /**
+   * @generated from field: uint32 n_failures = 4;
+   */
+  nFailures: number;
+
+  /**
+   * @generated from field: double lower_bound = 5;
+   */
+  lowerBound: number;
+
+  /**
+   * @generated from field: double upper_bound = 6;
+   */
+  upperBound: number;
+
+  /**
+   * @generated from field: double epsilon = 7;
+   */
+  epsilon: number;
+
+  /**
+   * @generated from field: double confidence = 8;
+   */
+  confidence: number;
+
+  /**
+   * @generated from field: bool stopped_early = 9;
+   */
+  stoppedEarly: boolean;
+
+  /**
+   * @generated from field: uint32 horizon_h = 10;
+   */
+  horizonH: number;
+
+  /**
+   * @generated from field: string limit_profile = 11;
+   */
+  limitProfile: string;
+
+  /**
+   * @generated from field: string calibration_version = 12;
+   */
+  calibrationVersion: string;
+
+  /**
+   * @generated from field: string calibration_sha256 = 13;
+   */
+  calibrationSha256: string;
+
+  /**
+   * @generated from field: uint64 seed = 14;
+   */
+  seed: bigint;
+
+  /**
+   * the recorded hour (local time) the snapshot describes
+   *
+   * @generated from field: string timestamp = 15;
+   */
+  timestamp: string;
+
+  /**
+   * calibration group the band came from
+   *
+   * @generated from field: string situation_key = 16;
+   */
+  situationKey: string;
+
+  /**
+   * band edges, fractions of this hour's demand
+   *
+   * @generated from field: double band_up = 17;
+   */
+  bandUp: number;
+
+  /**
+   * @generated from field: double band_down = 18;
+   */
+  bandDown: number;
+
+  /**
+   * conformal PID (storm mode)
+   *
+   * @generated from field: bool pid_enabled = 19;
+   */
+  pidEnabled: boolean;
+
+  /**
+   * total P + I + D widening applied
+   *
+   * @generated from field: double pid_extra = 20;
+   */
+  pidExtra: number;
+
+  /**
+   * @generated from field: bool corner_top_safe = 21;
+   */
+  cornerTopSafe: boolean;
+
+  /**
+   * @generated from field: bool corner_bottom_safe = 22;
+   */
+  cornerBottomSafe: boolean;
+
+  /**
+   * @generated from field: map<string, uint32> failures_by_island = 23;
+   */
+  failuresByIsland: { [key: string]: number };
+
+  /**
+   * @generated from field: map<string, uint32> failing_elements = 24;
+   */
+  failingElements: { [key: string]: number };
+
+  /**
+   * @generated from field: repeated string notes = 25;
+   */
+  notes: string[];
+};
+
+/**
+ * Describes the message metacore.verification.v1.RiskCertificate.
+ * Use `create(RiskCertificateSchema)` to create a new message.
+ */
+export declare const RiskCertificateSchema: GenMessage<RiskCertificate>;
+
+/**
+ * v1.1. One player's Shapley share of the certified failure rate; shares sum to k / N.
+ *
+ * @generated from message metacore.verification.v1.RiskAttribution
+ */
+export declare type RiskAttribution = Message<"metacore.verification.v1.RiskAttribution"> & {
+  /**
+   * a feeder-group bus or an island name from the topology
+   *
+   * @generated from field: string player = 1;
+   */
+  player: string;
+
+  /**
+   * @generated from field: string island = 2;
+   */
+  island: string;
+
+  /**
+   * @generated from field: repeated string buses = 3;
+   */
+  buses: string[];
+
+  /**
+   * @generated from field: double share = 4;
+   */
+  share: number;
+
+  /**
+   * @generated from field: double fraction_of_risk = 5;
+   */
+  fractionOfRisk: number;
+
+  /**
+   * failure rate when only this player moves
+   *
+   * @generated from field: double alone = 6;
+   */
+  alone: number;
+};
+
+/**
+ * Describes the message metacore.verification.v1.RiskAttribution.
+ * Use `create(RiskAttributionSchema)` to create a new message.
+ */
+export declare const RiskAttributionSchema: GenMessage<RiskAttribution>;
 
 /**
  * Structured violation evidence — the analytical core of the abductive claim, and the payload
@@ -266,6 +514,14 @@ export enum Decision {
    * @generated from enum value: DECISION_REJECT = 2;
    */
   REJECT = 2,
+
+  /**
+   * v1.1. M4 could not establish safety (solver error, malformed snapshot, or a risk bound that
+   * straddles the target). Never an approval: M3 treats it as not approved.
+   *
+   * @generated from enum value: DECISION_UNVERIFIED = 3;
+   */
+  UNVERIFIED = 3,
 }
 
 /**
@@ -306,6 +562,13 @@ export enum ViolationType {
    * @generated from enum value: VIOLATION_TYPE_MALFORMED_ACTION = 5;
    */
   MALFORMED_ACTION = 5,
+
+  /**
+   * v1.1. Island demand above the in-service generating capacity.
+   *
+   * @generated from enum value: VIOLATION_TYPE_GENERATION_INADEQUATE = 6;
+   */
+  GENERATION_INADEQUATE = 6,
 }
 
 /**

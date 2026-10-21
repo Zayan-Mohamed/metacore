@@ -9,6 +9,11 @@
 //
 // DETERMINISTIC. The verdict is produced by an OpenDSS power-flow solve against a safety
 // specification. Nothing in the decision path is learned.
+//
+// v1.1 (additive only): the UNVERIFIED decision, the generation-adequacy violation, the M1
+// snapshot and limit profile on the request, and the risk certificate and Shapley risk
+// attribution on the verdict. Every v1.0 field keeps its number and meaning, so a v1.0 reader
+// parses a v1.1 verdict (it sees UNVERIFIED as the unknown enum value 3: not an approval).
 
 package verificationv1
 

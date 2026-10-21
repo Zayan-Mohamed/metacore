@@ -1,0 +1,579 @@
+{
+ "topology_id": "northern-islands-v1",
+ "schema_version": {
+  "major": 1,
+  "minor": 0
+ },
+ "opendss_master_file": "topology/northern_islands_v1.dss",
+ "base_kv": 0.4,
+ "buses": [
+  {
+   "node_id": "NAI_PS",
+   "island": "Nainativu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": false,
+   "role": "power_station",
+   "x_offset": 0.0,
+   "y_offset": 0.0
+  },
+  {
+   "node_id": "NAI_F1",
+   "island": "Nainativu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": true,
+   "role": "feeder_group",
+   "x_offset": 1.0,
+   "y_offset": 1.0,
+   "note": "F1 assumed to carry the island's critical consumers (shared feeder; interview)"
+  },
+  {
+   "node_id": "NAI_F2",
+   "island": "Nainativu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": false,
+   "role": "feeder_group",
+   "x_offset": 2.0,
+   "y_offset": 1.0,
+   "note": ""
+  },
+  {
+   "node_id": "DEL_PS",
+   "island": "Delft-Neduntivu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": false,
+   "role": "power_station",
+   "x_offset": 10.0,
+   "y_offset": 0.0
+  },
+  {
+   "node_id": "DEL_F1",
+   "island": "Delft-Neduntivu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": true,
+   "role": "feeder_group",
+   "x_offset": 11.0,
+   "y_offset": 1.0,
+   "note": "F1 assumed to carry the island hospital and water plant (shared feeder; interview)"
+  },
+  {
+   "node_id": "DEL_F2",
+   "island": "Delft-Neduntivu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": false,
+   "role": "feeder_group",
+   "x_offset": 12.0,
+   "y_offset": 1.0,
+   "note": ""
+  },
+  {
+   "node_id": "ANA_PS",
+   "island": "Analaitivu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": false,
+   "role": "power_station",
+   "x_offset": 20.0,
+   "y_offset": 0.0
+  },
+  {
+   "node_id": "ANA_F1",
+   "island": "Analaitivu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": true,
+   "role": "feeder_group",
+   "x_offset": 21.0,
+   "y_offset": 1.0,
+   "note": "F1 assumed to carry the island's critical consumers (shared feeder; interview)"
+  },
+  {
+   "node_id": "ANA_F2",
+   "island": "Analaitivu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": false,
+   "role": "feeder_group",
+   "x_offset": 22.0,
+   "y_offset": 1.0,
+   "note": ""
+  },
+  {
+   "node_id": "ELU_PS",
+   "island": "Eluvaitivu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": false,
+   "role": "power_station",
+   "x_offset": 30.0,
+   "y_offset": 0.0
+  },
+  {
+   "node_id": "ELU_F1",
+   "island": "Eluvaitivu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": true,
+   "role": "feeder_group",
+   "x_offset": 31.0,
+   "y_offset": 1.0,
+   "note": "F1 assumed to carry the island's critical consumers (shared feeder; interview)"
+  },
+  {
+   "node_id": "ELU_F2",
+   "island": "Eluvaitivu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": false,
+   "role": "feeder_group",
+   "x_offset": 32.0,
+   "y_offset": 1.0,
+   "note": ""
+  },
+  {
+   "node_id": "ELU_HYB",
+   "island": "Eluvaitivu",
+   "asset_type": "BUS",
+   "nominal_kv": 0.4,
+   "critical_load": false,
+   "role": "hybrid_plant",
+   "x_offset": 31.0,
+   "y_offset": 2.0
+  }
+ ],
+ "lines": [
+  {
+   "edge_id": "NAI_PS_F1",
+   "from_node": "NAI_PS",
+   "to_node": "NAI_F1",
+   "length_km": 0.4,
+   "ampacity_a": 500.0,
+   "circuits": 5,
+   "r1_ohm_km": 0.064,
+   "x1_ohm_km": 0.016,
+   "r0_ohm_km": 0.256,
+   "x0_ohm_km": 0.064,
+   "provenance": "assumed",
+   "note": "5 parallel 100 A LV feeders lumped (DDLO rating measured; count, length and impedance assumed)"
+  },
+  {
+   "edge_id": "NAI_PS_F2",
+   "from_node": "NAI_PS",
+   "to_node": "NAI_F2",
+   "length_km": 0.4,
+   "ampacity_a": 500.0,
+   "circuits": 5,
+   "r1_ohm_km": 0.064,
+   "x1_ohm_km": 0.016,
+   "r0_ohm_km": 0.256,
+   "x0_ohm_km": 0.064,
+   "provenance": "assumed",
+   "note": "5 parallel 100 A LV feeders lumped (DDLO rating measured; count, length and impedance assumed)"
+  },
+  {
+   "edge_id": "DEL_PS_F1",
+   "from_node": "DEL_PS",
+   "to_node": "DEL_F1",
+   "length_km": 0.4,
+   "ampacity_a": 400.0,
+   "circuits": 4,
+   "r1_ohm_km": 0.08,
+   "x1_ohm_km": 0.02,
+   "r0_ohm_km": 0.32,
+   "x0_ohm_km": 0.08,
+   "provenance": "assumed",
+   "note": "4 parallel 100 A LV feeders lumped (DDLO rating measured; count, length and impedance assumed)"
+  },
+  {
+   "edge_id": "DEL_PS_F2",
+   "from_node": "DEL_PS",
+   "to_node": "DEL_F2",
+   "length_km": 0.4,
+   "ampacity_a": 400.0,
+   "circuits": 4,
+   "r1_ohm_km": 0.08,
+   "x1_ohm_km": 0.02,
+   "r0_ohm_km": 0.32,
+   "x0_ohm_km": 0.08,
+   "provenance": "assumed",
+   "note": "4 parallel 100 A LV feeders lumped (DDLO rating measured; count, length and impedance assumed)"
+  },
+  {
+   "edge_id": "ANA_PS_F1",
+   "from_node": "ANA_PS",
+   "to_node": "ANA_F1",
+   "length_km": 0.4,
+   "ampacity_a": 200.0,
+   "circuits": 2,
+   "r1_ohm_km": 0.16,
+   "x1_ohm_km": 0.04,
+   "r0_ohm_km": 0.64,
+   "x0_ohm_km": 0.16,
+   "provenance": "assumed",
+   "note": "2 parallel 100 A LV feeders lumped (DDLO rating measured; count, length and impedance assumed)"
+  },
+  {
+   "edge_id": "ANA_PS_F2",
+   "from_node": "ANA_PS",
+   "to_node": "ANA_F2",
+   "length_km": 0.4,
+   "ampacity_a": 200.0,
+   "circuits": 2,
+   "r1_ohm_km": 0.16,
+   "x1_ohm_km": 0.04,
+   "r0_ohm_km": 0.64,
+   "x0_ohm_km": 0.16,
+   "provenance": "assumed",
+   "note": "2 parallel 100 A LV feeders lumped (DDLO rating measured; count, length and impedance assumed)"
+  },
+  {
+   "edge_id": "ELU_PS_F1",
+   "from_node": "ELU_PS",
+   "to_node": "ELU_F1",
+   "length_km": 0.4,
+   "ampacity_a": 100.0,
+   "circuits": 1,
+   "r1_ohm_km": 0.32,
+   "x1_ohm_km": 0.08,
+   "r0_ohm_km": 1.28,
+   "x0_ohm_km": 0.32,
+   "provenance": "assumed",
+   "note": "1 parallel 100 A LV feeders lumped (DDLO rating measured; count, length and impedance assumed)"
+  },
+  {
+   "edge_id": "ELU_PS_F2",
+   "from_node": "ELU_PS",
+   "to_node": "ELU_F2",
+   "length_km": 0.4,
+   "ampacity_a": 100.0,
+   "circuits": 1,
+   "r1_ohm_km": 0.32,
+   "x1_ohm_km": 0.08,
+   "r0_ohm_km": 1.28,
+   "x0_ohm_km": 0.32,
+   "provenance": "assumed",
+   "note": "1 parallel 100 A LV feeders lumped (DDLO rating measured; count, length and impedance assumed)"
+  },
+  {
+   "edge_id": "ELU_HYB_F1",
+   "from_node": "ELU_HYB",
+   "to_node": "ELU_F1",
+   "length_km": 0.3,
+   "ampacity_a": 125.0,
+   "circuits": 1,
+   "r1_ohm_km": 0.32,
+   "x1_ohm_km": 0.08,
+   "r0_ohm_km": 1.28,
+   "x0_ohm_km": 0.32,
+   "provenance": "assumed",
+   "note": "connection point of the hybrid plant is not documented; assumed to F1"
+  }
+ ],
+ "assets": [
+  {
+   "element": "NAI_DG1",
+   "bus": "NAI_PS",
+   "island": "Nainativu",
+   "asset_type": "DIESEL",
+   "rating_kva": 380.0,
+   "in_service": true,
+   "grid_forming": true,
+   "provenance": "measured",
+   "note": "lead genset, modelled as the island's stiff source (Vsource)"
+  },
+  {
+   "element": "NAI_DG2",
+   "bus": "NAI_PS",
+   "island": "Nainativu",
+   "asset_type": "DIESEL",
+   "rating_kva": 250.0,
+   "in_service": true,
+   "grid_forming": false,
+   "provenance": "measured",
+   "note": "standby genset, dispatchable (Generator, 0 kW in base case)"
+  },
+  {
+   "element": "NAI_DG3",
+   "bus": "NAI_PS",
+   "island": "Nainativu",
+   "asset_type": "DIESEL",
+   "rating_kva": 250.0,
+   "in_service": true,
+   "grid_forming": false,
+   "provenance": "measured",
+   "note": "standby genset, dispatchable (Generator, 0 kW in base case)"
+  },
+  {
+   "element": "DEL_DG1",
+   "bus": "DEL_PS",
+   "island": "Delft-Neduntivu",
+   "asset_type": "DIESEL",
+   "rating_kva": 330.0,
+   "in_service": true,
+   "grid_forming": true,
+   "provenance": "measured",
+   "note": "lead genset, modelled as the island's stiff source (Vsource)"
+  },
+  {
+   "element": "DEL_DG2",
+   "bus": "DEL_PS",
+   "island": "Delft-Neduntivu",
+   "asset_type": "DIESEL",
+   "rating_kva": 250.0,
+   "in_service": true,
+   "grid_forming": false,
+   "provenance": "measured",
+   "note": "standby genset, dispatchable (Generator, 0 kW in base case)"
+  },
+  {
+   "element": "DEL_DG3",
+   "bus": "DEL_PS",
+   "island": "Delft-Neduntivu",
+   "asset_type": "DIESEL",
+   "rating_kva": 250.0,
+   "in_service": true,
+   "grid_forming": false,
+   "provenance": "measured",
+   "note": "standby genset, dispatchable (Generator, 0 kW in base case)"
+  },
+  {
+   "element": "ANA_DG1",
+   "bus": "ANA_PS",
+   "island": "Analaitivu",
+   "asset_type": "DIESEL",
+   "rating_kva": 250.0,
+   "in_service": true,
+   "grid_forming": true,
+   "provenance": "measured",
+   "note": "lead genset, modelled as the island's stiff source (Vsource)"
+  },
+  {
+   "element": "ANA_DG2",
+   "bus": "ANA_PS",
+   "island": "Analaitivu",
+   "asset_type": "DIESEL",
+   "rating_kva": 100.0,
+   "in_service": true,
+   "grid_forming": false,
+   "provenance": "measured",
+   "note": "standby genset, dispatchable (Generator, 0 kW in base case)"
+  },
+  {
+   "element": "ANA_DG3",
+   "bus": "ANA_PS",
+   "island": "Analaitivu",
+   "asset_type": "DIESEL",
+   "rating_kva": 100.0,
+   "in_service": true,
+   "grid_forming": false,
+   "provenance": "measured",
+   "note": "standby genset, dispatchable (Generator, 0 kW in base case)"
+  },
+  {
+   "element": "ELU_DG1",
+   "bus": "ELU_PS",
+   "island": "Eluvaitivu",
+   "asset_type": "DIESEL",
+   "rating_kva": 100.0,
+   "in_service": true,
+   "grid_forming": true,
+   "provenance": "measured",
+   "note": "lead genset, modelled as the island's stiff source (Vsource)"
+  },
+  {
+   "element": "ELU_HYB_PV",
+   "bus": "ELU_HYB",
+   "island": "Eluvaitivu",
+   "asset_type": "PV",
+   "rating_kva": 46.26,
+   "in_service": true,
+   "grid_forming": false,
+   "provenance": "measured",
+   "note": "PV array; 46.26 kW per field sketch and interview (tender ~50 kWp)"
+  },
+  {
+   "element": "ELU_HYB_WIND",
+   "bus": "ELU_HYB",
+   "island": "Eluvaitivu",
+   "asset_type": "WIND",
+   "rating_kva": 21.0,
+   "in_service": false,
+   "grid_forming": false,
+   "provenance": "measured",
+   "note": "6 x 3.5 kW Windspot; all out of service per interview"
+  },
+  {
+   "element": "ELU_HYB_BESS",
+   "bus": "ELU_HYB",
+   "island": "Eluvaitivu",
+   "asset_type": "BESS",
+   "rating_kva": 72.0,
+   "in_service": true,
+   "grid_forming": false,
+   "provenance": "measured",
+   "note": "12 x 6 kW SMA Sunny Island; ~134 kWh usable LiFePO4; grid-forming inside the hybrid plant; bank expired Q4 2025 (tender)"
+  },
+  {
+   "element": "ELU_HYB_DG",
+   "bus": "ELU_HYB",
+   "island": "Eluvaitivu",
+   "asset_type": "DIESEL",
+   "rating_kva": 30.0,
+   "in_service": true,
+   "grid_forming": false,
+   "provenance": "measured",
+   "note": "30 kW backup genset inside the hybrid plant"
+  }
+ ],
+ "loads": [
+  {
+   "element": "NAI_F1_LOAD",
+   "bus": "NAI_F1",
+   "island": "Nainativu",
+   "base_kw": 67.805,
+   "base_kvar": 42.022,
+   "provenance": "derived",
+   "note": "base case = island mean of the constructed hourly load"
+  },
+  {
+   "element": "NAI_F2_LOAD",
+   "bus": "NAI_F2",
+   "island": "Nainativu",
+   "base_kw": 67.805,
+   "base_kvar": 42.022,
+   "provenance": "derived",
+   "note": "base case = island mean of the constructed hourly load"
+  },
+  {
+   "element": "DEL_F1_LOAD",
+   "bus": "DEL_F1",
+   "island": "Delft-Neduntivu",
+   "base_kw": 62.44,
+   "base_kvar": 38.697,
+   "provenance": "derived",
+   "note": "base case = island mean of the constructed hourly load"
+  },
+  {
+   "element": "DEL_F2_LOAD",
+   "bus": "DEL_F2",
+   "island": "Delft-Neduntivu",
+   "base_kw": 62.44,
+   "base_kvar": 38.697,
+   "provenance": "derived",
+   "note": "base case = island mean of the constructed hourly load"
+  },
+  {
+   "element": "ANA_F1_LOAD",
+   "bus": "ANA_F1",
+   "island": "Analaitivu",
+   "base_kw": 23.5,
+   "base_kvar": 14.564,
+   "provenance": "derived",
+   "note": "base case = island mean of the constructed hourly load"
+  },
+  {
+   "element": "ANA_F2_LOAD",
+   "bus": "ANA_F2",
+   "island": "Analaitivu",
+   "base_kw": 23.5,
+   "base_kvar": 14.564,
+   "provenance": "derived",
+   "note": "base case = island mean of the constructed hourly load"
+  },
+  {
+   "element": "ELU_F1_LOAD",
+   "bus": "ELU_F1",
+   "island": "Eluvaitivu",
+   "base_kw": 10.88,
+   "base_kvar": 6.743,
+   "provenance": "derived",
+   "note": "base case = island mean of the constructed hourly load"
+  },
+  {
+   "element": "ELU_F2_LOAD",
+   "bus": "ELU_F2",
+   "island": "Eluvaitivu",
+   "base_kw": 10.88,
+   "base_kvar": 6.743,
+   "provenance": "derived",
+   "note": "base case = island mean of the constructed hourly load"
+  }
+ ],
+ "node_map": {
+  "Nainativu/bus": [
+   "NAI_F1",
+   "NAI_F2"
+  ],
+  "Nainativu/diesel": [
+   "NAI_PS"
+  ],
+  "Delft-Neduntivu/bus": [
+   "DEL_F1",
+   "DEL_F2"
+  ],
+  "Delft-Neduntivu/diesel": [
+   "DEL_PS"
+  ],
+  "Analaitivu/bus": [
+   "ANA_F1",
+   "ANA_F2"
+  ],
+  "Analaitivu/diesel": [
+   "ANA_PS"
+  ],
+  "Eluvaitivu/bus": [
+   "ELU_F1",
+   "ELU_F2"
+  ],
+  "Eluvaitivu/diesel": [
+   "ELU_PS"
+  ],
+  "Eluvaitivu/pv": [
+   "ELU_HYB"
+  ],
+  "Eluvaitivu/bess": [
+   "ELU_HYB"
+  ]
+ },
+ "assumptions": {
+  "power_factor": 0.85,
+  "feeder_headroom": 1.25,
+  "feeder_equivalent_km": 0.4,
+  "feeder_shares": {
+   "F1": 0.5,
+   "F2": 0.5
+  },
+  "cable_per_circuit_ohm_km": {
+   "r1": 0.32,
+   "x1": 0.08,
+   "r0": 1.28,
+   "x0": 0.32
+  },
+  "source_mvasc": 50.0,
+  "hybrid_link_km": 0.3,
+  "hybrid_link_amps": 125.0
+ },
+ "governance": "x_offset / y_offset are arbitrary layout offsets, never coordinates.",
+ "snapshot_format": {
+  "message": "metacore.module1.v1.GridStateSnapshot",
+  "update_period_s": 3600,
+  "node_state_fields": {
+   "voltage_pu": "p.u. of 400 V; QUALITY_MISSING offline -- M4's power flow computes it",
+   "p_kw": "kW demand at a feeder-group bus; QUALITY_INTERPOLATED (downscaled CEB ledger)",
+   "q_kvar": "kvar demand at power factor 0.85; QUALITY_INTERPOLATED",
+   "soc_fraction": "storage only; QUALITY_MISSING (no battery telemetry exists)"
+  },
+  "quality_order": [
+   "voltage_pu",
+   "p_kw",
+   "q_kvar",
+   "soc_fraction"
+  ],
+  "assets_out_of_service": "assets the snapshot asks M4 to disable for this hour"
+ }
+}

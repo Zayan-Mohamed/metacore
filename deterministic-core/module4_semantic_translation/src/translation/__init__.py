@@ -3,13 +3,15 @@
 ZERO ML DEPENDENCIES.
 """
 
-from .abductive.attribution import AbductiveAttributor
-from .templates.causal_logger import TemplateCausalLogger
+from .abductive.attribution import AbductiveAttributor, TopologyEntities
+from .templates.causal_logger import GroundingValidator, TemplateCausalLogger
 from .types import CausalLog, Generator
 
 __all__ = [
     "AbductiveAttributor",
+    "TopologyEntities",
     "TemplateCausalLogger",
+    "GroundingValidator",
     "CausalLog",
     "Generator",
 ]

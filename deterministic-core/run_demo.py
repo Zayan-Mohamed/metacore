@@ -22,13 +22,11 @@ CORE_DIR = Path(__file__).resolve().parent
 
 SAMPLE_EPISODES = [
     {
-        "description": "1. Nominal System 1 reactive load shed (Safe)",
+        "description": "1. Nominal System 1 feeder-group load shed (Safe)",
         "action": ProposedControlAction(
             action_id="act-demo-001-nominal",
             origin="SYSTEM1",
-            breakers=[],
-            load_shed=[LoadShedCommand(node_id="N8", shed_fraction=0.1117, priority_tier=3)],
-            dispatch=[],
+            load_shed=[LoadShedCommand(node_id="NAI_F2", shed_fraction=0.1117, priority_tier=3)],
             rationale="S1 reactive shed vuln=0.14",
         ),
     },
@@ -37,52 +35,39 @@ SAMPLE_EPISODES = [
         "action": ProposedControlAction(
             action_id="act-demo-002-survival",
             origin="SYSTEM2",
-            breakers=[BreakerCommand(edge_id="E_crit_1", closed=True)],
             load_shed=[
-                LoadShedCommand(node_id="N11", shed_fraction=0.25, priority_tier=3),
-                LoadShedCommand(node_id="N8", shed_fraction=0.0983, priority_tier=3),
+                LoadShedCommand(node_id="ELU_F2", shed_fraction=0.25, priority_tier=3),
+                LoadShedCommand(node_id="DEL_F2", shed_fraction=0.0983, priority_tier=3),
             ],
-            dispatch=[DispatchSetpoint(node_id="N4", p_kw=147.37, q_kvar=10.0)],
+            dispatch=[DispatchSetpoint(node_id="ELU_HYB_DG", p_kw=20.0, q_kvar=10.0)],
             rationale="S2 survival opt vuln=0.63 protect-tier1",
         ),
     },
     {
-        "description": "3. Unsafe action: Tripping tie lines causing island undervoltage (Reject)",
+        "description": "3. Unsafe action: battery fast-charge drags the hybrid bus down (Reject)",
         "action": ProposedControlAction(
             action_id="act-demo-003-undervolt",
             origin="SYSTEM2",
-            breakers=[
-                BreakerCommand(edge_id="Line_2_3", closed=False),
-                BreakerCommand(edge_id="E_crit_1", closed=False),
-            ],
-            load_shed=[],
-            dispatch=[
-                DispatchSetpoint(node_id="N8", p_kw=0.0, q_kvar=0.0),
-                DispatchSetpoint(node_id="N9", p_kw=0.0, q_kvar=0.0),
-            ],
-            rationale="Aggressive island isolation without backup generation",
+            dispatch=[DispatchSetpoint(node_id="ELU_HYB_BESS", p_kw=-72.0, q_kvar=0.0)],
+            rationale="Aggressive battery recharge before the storm",
         ),
     },
     {
-        "description": "4. Unsafe action: Reactive power over-injection (Reject)",
+        "description": "4. Unsafe action: battery export over-voltage (Reject)",
         "action": ProposedControlAction(
             action_id="act-demo-004-overvolt",
             origin="SYSTEM2",
-            breakers=[],
-            load_shed=[],
-            dispatch=[DispatchSetpoint(node_id="N1", p_kw=500.0, q_kvar=6000.0)],
-            rationale="Uncompensated voltage support attempt",
+            dispatch=[DispatchSetpoint(node_id="ELU_HYB_BESS", p_kw=72.0, q_kvar=0.0)],
+            rationale="Uncompensated battery export",
         ),
     },
     {
-        "description": "5. Unsafe action: Excessive generator export (Reject)",
+        "description": "5. Unsafe action: hybrid plant flat out overloads its link (Reject)",
         "action": ProposedControlAction(
             action_id="act-demo-005-overload",
             origin="SYSTEM2",
-            breakers=[],
-            load_shed=[],
-            dispatch=[DispatchSetpoint(node_id="N8", p_kw=6000.0, q_kvar=500.0)],
-            rationale="Excessive export beyond subsea cable rating",
+            dispatch=[DispatchSetpoint(node_id="ELU_HYB", p_kw=140.0, q_kvar=0.0)],
+            rationale="Hybrid plant flat out",
         ),
     },
     {
@@ -91,8 +76,6 @@ SAMPLE_EPISODES = [
             action_id="act-demo-006-malformed",
             origin="SYSTEM1",
             breakers=[BreakerCommand(edge_id="Line_Invalid_99", closed=False)],
-            load_shed=[],
-            dispatch=[],
             rationale="Faulty topology mapping",
         ),
     },

@@ -23,10 +23,11 @@ _sym_db = _symbol_database.Default()
 
 
 from . import common_pb2 as common__pb2
+from . import module1_pb2 as module1__pb2
 from . import module3_pb2 as module3__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12verification.proto\x12\x18metacore.verification.v1\x1a\x0c\x63ommon.proto\x1a\rmodule3.proto\"\xb4\x01\n\x13VerificationRequest\x12\x38\n\x08\x65nvelope\x18\x01 \x01(\x0b\x32\x1c.metacore.common.v1.EnvelopeR\x08\x65nvelope\x12\x42\n\x06\x61\x63tion\x18\x02 \x01(\x0b\x32*.metacore.module3.v1.ProposedControlActionR\x06\x61\x63tion\x12\x1f\n\x0btopology_id\x18\x03 \x01(\tR\ntopologyId\"\xf2\x02\n\x13VerificationVerdict\x12\x38\n\x08\x65nvelope\x18\x01 \x01(\x0b\x32\x1c.metacore.common.v1.EnvelopeR\x08\x65nvelope\x12\x1b\n\taction_id\x18\x02 \x01(\tR\x08\x61\x63tionId\x12>\n\x08\x64\x65\x63ision\x18\x03 \x01(\x0e\x32\".metacore.verification.v1.DecisionR\x08\x64\x65\x63ision\x12\x43\n\nviolations\x18\x04 \x03(\x0b\x32#.metacore.verification.v1.ViolationR\nviolations\x12(\n\x10solve_latency_ms\x18\x05 \x01(\x01R\x0esolveLatencyMs\x12!\n\x0cspec_version\x18\x06 \x01(\tR\x0bspecVersion\x12\x32\n\x15network_model_version\x18\x07 \x01(\tR\x13networkModelVersion\"\xf5\x01\n\tViolation\x12;\n\x04type\x18\x01 \x01(\x0e\x32\'.metacore.verification.v1.ViolationTypeR\x04type\x12\x1d\n\nelement_id\x18\x02 \x01(\tR\telementId\x12\x1a\n\x08measured\x18\x03 \x01(\x01R\x08measured\x12\x14\n\x05limit\x18\x04 \x01(\x01R\x05limit\x12\'\n\x0fmargin_fraction\x18\x05 \x01(\x01R\x0emarginFraction\x12\x31\n\x14\x61ttributed_component\x18\x06 \x01(\tR\x13\x61ttributedComponent\"\xc8\x01\n\x0eRejectionTrace\x12\x38\n\x08\x65nvelope\x18\x01 \x01(\x0b\x32\x1c.metacore.common.v1.EnvelopeR\x08\x65nvelope\x12\x1b\n\taction_id\x18\x02 \x01(\tR\x08\x61\x63tionId\x12\x43\n\nviolations\x18\x03 \x03(\x0b\x32#.metacore.verification.v1.ViolationR\nviolations\x12\x1a\n\x08severity\x18\x04 \x01(\x02R\x08severity\"\xe6\x01\n\tCausalLog\x12\x38\n\x08\x65nvelope\x18\x01 \x01(\x0b\x32\x1c.metacore.common.v1.EnvelopeR\x08\x65nvelope\x12\x1b\n\taction_id\x18\x02 \x01(\tR\x08\x61\x63tionId\x12\x12\n\x04text\x18\x03 \x01(\tR\x04text\x12+\n\x11grounded_entities\x18\x04 \x03(\tR\x10groundedEntities\x12\x41\n\tgenerator\x18\x05 \x01(\x0e\x32#.metacore.verification.v1.GeneratorR\tgenerator\"O\n\x10RejectionRequest\x12;\n\x08scenario\x18\x01 \x01(\x0b\x32\x1f.metacore.common.v1.ScenarioRefR\x08scenario\"\x0f\n\rHealthRequest*O\n\x08\x44\x65\x63ision\x12\x18\n\x14\x44\x45\x43ISION_UNSPECIFIED\x10\x00\x12\x14\n\x10\x44\x45\x43ISION_APPROVE\x10\x01\x12\x13\n\x0f\x44\x45\x43ISION_REJECT\x10\x02*\xde\x01\n\rViolationType\x12\x1e\n\x1aVIOLATION_TYPE_UNSPECIFIED\x10\x00\x12\x1f\n\x1bVIOLATION_TYPE_UNDERVOLTAGE\x10\x01\x12\x1e\n\x1aVIOLATION_TYPE_OVERVOLTAGE\x10\x02\x12#\n\x1fVIOLATION_TYPE_THERMAL_OVERLOAD\x10\x03\x12\"\n\x1eVIOLATION_TYPE_NON_CONVERGENCE\x10\x04\x12#\n\x1fVIOLATION_TYPE_MALFORMED_ACTION\x10\x05*Y\n\tGenerator\x12\x19\n\x15GENERATOR_UNSPECIFIED\x10\x00\x12\x16\n\x12GENERATOR_TEMPLATE\x10\x01\x12\x19\n\x15GENERATOR_CONSTRAINED\x10\x02\x32\x9f\x03\n\x13VerificationService\x12\x66\n\x06Verify\x12-.metacore.verification.v1.VerificationRequest\x1a-.metacore.verification.v1.VerificationVerdict\x12j\n\x10StreamRejections\x12*.metacore.verification.v1.RejectionRequest\x1a(.metacore.verification.v1.RejectionTrace0\x01\x12\x65\n\x10StreamCausalLogs\x12*.metacore.verification.v1.RejectionRequest\x1a#.metacore.verification.v1.CausalLog0\x01\x12M\n\x06Health\x12\'.metacore.verification.v1.HealthRequest\x1a\x1a.metacore.common.v1.HealthB\xf4\x01\n\x1c\x63om.metacore.verification.v1B\x11VerificationProtoP\x01Z?github.com/metacore/contracts/go/verification/v1;verificationv1\xa2\x02\x03MVX\xaa\x02\x18Metacore.Verification.V1\xca\x02\x18Metacore\\Verification\\V1\xe2\x02$Metacore\\Verification\\V1\\GPBMetadata\xea\x02\x1aMetacore::Verification::V1b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x12verification.proto\x12\x18metacore.verification.v1\x1a\x0c\x63ommon.proto\x1a\rmodule1.proto\x1a\rmodule3.proto\"\x9d\x02\n\x13VerificationRequest\x12\x38\n\x08\x65nvelope\x18\x01 \x01(\x0b\x32\x1c.metacore.common.v1.EnvelopeR\x08\x65nvelope\x12\x42\n\x06\x61\x63tion\x18\x02 \x01(\x0b\x32*.metacore.module3.v1.ProposedControlActionR\x06\x61\x63tion\x12\x1f\n\x0btopology_id\x18\x03 \x01(\tR\ntopologyId\x12\x42\n\x08snapshot\x18\x04 \x01(\x0b\x32&.metacore.module1.v1.GridStateSnapshotR\x08snapshot\x12#\n\rlimit_profile\x18\x05 \x01(\tR\x0climitProfile\"\xe0\x04\n\x13VerificationVerdict\x12\x38\n\x08\x65nvelope\x18\x01 \x01(\x0b\x32\x1c.metacore.common.v1.EnvelopeR\x08\x65nvelope\x12\x1b\n\taction_id\x18\x02 \x01(\tR\x08\x61\x63tionId\x12>\n\x08\x64\x65\x63ision\x18\x03 \x01(\x0e\x32\".metacore.verification.v1.DecisionR\x08\x64\x65\x63ision\x12\x43\n\nviolations\x18\x04 \x03(\x0b\x32#.metacore.verification.v1.ViolationR\nviolations\x12(\n\x10solve_latency_ms\x18\x05 \x01(\x01R\x0esolveLatencyMs\x12!\n\x0cspec_version\x18\x06 \x01(\tR\x0bspecVersion\x12\x32\n\x15network_model_version\x18\x07 \x01(\tR\x13networkModelVersion\x12K\n\x0b\x63\x65rtificate\x18\x08 \x01(\x0b\x32).metacore.verification.v1.RiskCertificateR\x0b\x63\x65rtificate\x12K\n\x0b\x61ttribution\x18\t \x03(\x0b\x32).metacore.verification.v1.RiskAttributionR\x0b\x61ttribution\x12#\n\rlimit_profile\x18\n \x01(\tR\x0climitProfile\x12-\n\x12unverified_reasons\x18\x0b \x03(\tR\x11unverifiedReasons\"\x83\t\n\x0fRiskCertificate\x12>\n\x08\x64\x65\x63ision\x18\x01 \x01(\x0e\x32\".metacore.verification.v1.DecisionR\x08\x64\x65\x63ision\x12\x1f\n\x0bn_scenarios\x18\x02 \x01(\rR\nnScenarios\x12\x13\n\x05n_max\x18\x03 \x01(\rR\x04nMax\x12\x1d\n\nn_failures\x18\x04 \x01(\rR\tnFailures\x12\x1f\n\x0blower_bound\x18\x05 \x01(\x01R\nlowerBound\x12\x1f\n\x0bupper_bound\x18\x06 \x01(\x01R\nupperBound\x12\x18\n\x07\x65psilon\x18\x07 \x01(\x01R\x07\x65psilon\x12\x1e\n\nconfidence\x18\x08 \x01(\x01R\nconfidence\x12#\n\rstopped_early\x18\t \x01(\x08R\x0cstoppedEarly\x12\x1b\n\thorizon_h\x18\n \x01(\rR\x08horizonH\x12#\n\rlimit_profile\x18\x0b \x01(\tR\x0climitProfile\x12/\n\x13\x63\x61libration_version\x18\x0c \x01(\tR\x12\x63\x61librationVersion\x12-\n\x12\x63\x61libration_sha256\x18\r \x01(\tR\x11\x63\x61librationSha256\x12\x12\n\x04seed\x18\x0e \x01(\x04R\x04seed\x12\x1c\n\ttimestamp\x18\x0f \x01(\tR\ttimestamp\x12#\n\rsituation_key\x18\x10 \x01(\tR\x0csituationKey\x12\x17\n\x07\x62\x61nd_up\x18\x11 \x01(\x01R\x06\x62\x61ndUp\x12\x1b\n\tband_down\x18\x12 \x01(\x01R\x08\x62\x61ndDown\x12\x1f\n\x0bpid_enabled\x18\x13 \x01(\x08R\npidEnabled\x12\x1b\n\tpid_extra\x18\x14 \x01(\x01R\x08pidExtra\x12&\n\x0f\x63orner_top_safe\x18\x15 \x01(\x08R\rcornerTopSafe\x12,\n\x12\x63orner_bottom_safe\x18\x16 \x01(\x08R\x10\x63ornerBottomSafe\x12m\n\x12\x66\x61ilures_by_island\x18\x17 \x03(\x0b\x32?.metacore.verification.v1.RiskCertificate.FailuresByIslandEntryR\x10\x66\x61iluresByIsland\x12i\n\x10\x66\x61iling_elements\x18\x18 \x03(\x0b\x32>.metacore.verification.v1.RiskCertificate.FailingElementsEntryR\x0f\x66\x61ilingElements\x12\x14\n\x05notes\x18\x19 \x03(\tR\x05notes\x1a\x43\n\x15\x46\x61iluresByIslandEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\rR\x05value:\x02\x38\x01\x1a\x42\n\x14\x46\x61ilingElementsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\rR\x05value:\x02\x38\x01\"\xad\x01\n\x0fRiskAttribution\x12\x16\n\x06player\x18\x01 \x01(\tR\x06player\x12\x16\n\x06island\x18\x02 \x01(\tR\x06island\x12\x14\n\x05\x62uses\x18\x03 \x03(\tR\x05\x62uses\x12\x14\n\x05share\x18\x04 \x01(\x01R\x05share\x12(\n\x10\x66raction_of_risk\x18\x05 \x01(\x01R\x0e\x66ractionOfRisk\x12\x14\n\x05\x61lone\x18\x06 \x01(\x01R\x05\x61lone\"\xf5\x01\n\tViolation\x12;\n\x04type\x18\x01 \x01(\x0e\x32\'.metacore.verification.v1.ViolationTypeR\x04type\x12\x1d\n\nelement_id\x18\x02 \x01(\tR\telementId\x12\x1a\n\x08measured\x18\x03 \x01(\x01R\x08measured\x12\x14\n\x05limit\x18\x04 \x01(\x01R\x05limit\x12\'\n\x0fmargin_fraction\x18\x05 \x01(\x01R\x0emarginFraction\x12\x31\n\x14\x61ttributed_component\x18\x06 \x01(\tR\x13\x61ttributedComponent\"\xc8\x01\n\x0eRejectionTrace\x12\x38\n\x08\x65nvelope\x18\x01 \x01(\x0b\x32\x1c.metacore.common.v1.EnvelopeR\x08\x65nvelope\x12\x1b\n\taction_id\x18\x02 \x01(\tR\x08\x61\x63tionId\x12\x43\n\nviolations\x18\x03 \x03(\x0b\x32#.metacore.verification.v1.ViolationR\nviolations\x12\x1a\n\x08severity\x18\x04 \x01(\x02R\x08severity\"\xe6\x01\n\tCausalLog\x12\x38\n\x08\x65nvelope\x18\x01 \x01(\x0b\x32\x1c.metacore.common.v1.EnvelopeR\x08\x65nvelope\x12\x1b\n\taction_id\x18\x02 \x01(\tR\x08\x61\x63tionId\x12\x12\n\x04text\x18\x03 \x01(\tR\x04text\x12+\n\x11grounded_entities\x18\x04 \x03(\tR\x10groundedEntities\x12\x41\n\tgenerator\x18\x05 \x01(\x0e\x32#.metacore.verification.v1.GeneratorR\tgenerator\"O\n\x10RejectionRequest\x12;\n\x08scenario\x18\x01 \x01(\x0b\x32\x1f.metacore.common.v1.ScenarioRefR\x08scenario\"\x0f\n\rHealthRequest*h\n\x08\x44\x65\x63ision\x12\x18\n\x14\x44\x45\x43ISION_UNSPECIFIED\x10\x00\x12\x14\n\x10\x44\x45\x43ISION_APPROVE\x10\x01\x12\x13\n\x0f\x44\x45\x43ISION_REJECT\x10\x02\x12\x17\n\x13\x44\x45\x43ISION_UNVERIFIED\x10\x03*\x88\x02\n\rViolationType\x12\x1e\n\x1aVIOLATION_TYPE_UNSPECIFIED\x10\x00\x12\x1f\n\x1bVIOLATION_TYPE_UNDERVOLTAGE\x10\x01\x12\x1e\n\x1aVIOLATION_TYPE_OVERVOLTAGE\x10\x02\x12#\n\x1fVIOLATION_TYPE_THERMAL_OVERLOAD\x10\x03\x12\"\n\x1eVIOLATION_TYPE_NON_CONVERGENCE\x10\x04\x12#\n\x1fVIOLATION_TYPE_MALFORMED_ACTION\x10\x05\x12(\n$VIOLATION_TYPE_GENERATION_INADEQUATE\x10\x06*Y\n\tGenerator\x12\x19\n\x15GENERATOR_UNSPECIFIED\x10\x00\x12\x16\n\x12GENERATOR_TEMPLATE\x10\x01\x12\x19\n\x15GENERATOR_CONSTRAINED\x10\x02\x32\x9f\x03\n\x13VerificationService\x12\x66\n\x06Verify\x12-.metacore.verification.v1.VerificationRequest\x1a-.metacore.verification.v1.VerificationVerdict\x12j\n\x10StreamRejections\x12*.metacore.verification.v1.RejectionRequest\x1a(.metacore.verification.v1.RejectionTrace0\x01\x12\x65\n\x10StreamCausalLogs\x12*.metacore.verification.v1.RejectionRequest\x1a#.metacore.verification.v1.CausalLog0\x01\x12M\n\x06Health\x12\'.metacore.verification.v1.HealthRequest\x1a\x1a.metacore.common.v1.HealthB\xf4\x01\n\x1c\x63om.metacore.verification.v1B\x11VerificationProtoP\x01Z?github.com/metacore/contracts/go/verification/v1;verificationv1\xa2\x02\x03MVX\xaa\x02\x18Metacore.Verification.V1\xca\x02\x18Metacore\\Verification\\V1\xe2\x02$Metacore\\Verification\\V1\\GPBMetadata\xea\x02\x1aMetacore::Verification::V1b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,26 +35,38 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'verification_pb2', _globals
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\034com.metacore.verification.v1B\021VerificationProtoP\001Z?github.com/metacore/contracts/go/verification/v1;verificationv1\242\002\003MVX\252\002\030Metacore.Verification.V1\312\002\030Metacore\\Verification\\V1\342\002$Metacore\\Verification\\V1\\GPBMetadata\352\002\032Metacore::Verification::V1'
-  _globals['_DECISION']._serialized_start=1415
-  _globals['_DECISION']._serialized_end=1494
-  _globals['_VIOLATIONTYPE']._serialized_start=1497
-  _globals['_VIOLATIONTYPE']._serialized_end=1719
-  _globals['_GENERATOR']._serialized_start=1721
-  _globals['_GENERATOR']._serialized_end=1810
-  _globals['_VERIFICATIONREQUEST']._serialized_start=78
-  _globals['_VERIFICATIONREQUEST']._serialized_end=258
-  _globals['_VERIFICATIONVERDICT']._serialized_start=261
-  _globals['_VERIFICATIONVERDICT']._serialized_end=631
-  _globals['_VIOLATION']._serialized_start=634
-  _globals['_VIOLATION']._serialized_end=879
-  _globals['_REJECTIONTRACE']._serialized_start=882
-  _globals['_REJECTIONTRACE']._serialized_end=1082
-  _globals['_CAUSALLOG']._serialized_start=1085
-  _globals['_CAUSALLOG']._serialized_end=1315
-  _globals['_REJECTIONREQUEST']._serialized_start=1317
-  _globals['_REJECTIONREQUEST']._serialized_end=1396
-  _globals['_HEALTHREQUEST']._serialized_start=1398
-  _globals['_HEALTHREQUEST']._serialized_end=1413
-  _globals['_VERIFICATIONSERVICE']._serialized_start=1813
-  _globals['_VERIFICATIONSERVICE']._serialized_end=2228
+  _globals['_RISKCERTIFICATE_FAILURESBYISLANDENTRY']._loaded_options = None
+  _globals['_RISKCERTIFICATE_FAILURESBYISLANDENTRY']._serialized_options = b'8\001'
+  _globals['_RISKCERTIFICATE_FAILINGELEMENTSENTRY']._loaded_options = None
+  _globals['_RISKCERTIFICATE_FAILINGELEMENTSENTRY']._serialized_options = b'8\001'
+  _globals['_DECISION']._serialized_start=3107
+  _globals['_DECISION']._serialized_end=3211
+  _globals['_VIOLATIONTYPE']._serialized_start=3214
+  _globals['_VIOLATIONTYPE']._serialized_end=3478
+  _globals['_GENERATOR']._serialized_start=3480
+  _globals['_GENERATOR']._serialized_end=3569
+  _globals['_VERIFICATIONREQUEST']._serialized_start=93
+  _globals['_VERIFICATIONREQUEST']._serialized_end=378
+  _globals['_VERIFICATIONVERDICT']._serialized_start=381
+  _globals['_VERIFICATIONVERDICT']._serialized_end=989
+  _globals['_RISKCERTIFICATE']._serialized_start=992
+  _globals['_RISKCERTIFICATE']._serialized_end=2147
+  _globals['_RISKCERTIFICATE_FAILURESBYISLANDENTRY']._serialized_start=2012
+  _globals['_RISKCERTIFICATE_FAILURESBYISLANDENTRY']._serialized_end=2079
+  _globals['_RISKCERTIFICATE_FAILINGELEMENTSENTRY']._serialized_start=2081
+  _globals['_RISKCERTIFICATE_FAILINGELEMENTSENTRY']._serialized_end=2147
+  _globals['_RISKATTRIBUTION']._serialized_start=2150
+  _globals['_RISKATTRIBUTION']._serialized_end=2323
+  _globals['_VIOLATION']._serialized_start=2326
+  _globals['_VIOLATION']._serialized_end=2571
+  _globals['_REJECTIONTRACE']._serialized_start=2574
+  _globals['_REJECTIONTRACE']._serialized_end=2774
+  _globals['_CAUSALLOG']._serialized_start=2777
+  _globals['_CAUSALLOG']._serialized_end=3007
+  _globals['_REJECTIONREQUEST']._serialized_start=3009
+  _globals['_REJECTIONREQUEST']._serialized_end=3088
+  _globals['_HEALTHREQUEST']._serialized_start=3090
+  _globals['_HEALTHREQUEST']._serialized_end=3105
+  _globals['_VERIFICATIONSERVICE']._serialized_start=3572
+  _globals['_VERIFICATIONSERVICE']._serialized_end=3987
 # @@protoc_insertion_point(module_scope)

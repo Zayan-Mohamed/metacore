@@ -1,3 +1,7 @@
+! RETIRED (ADR 0005). Module 4 never compiles this file; its model is northern_islands_v1.dss.
+! Kept unchanged at this path only as Module 3's frozen training topology, which M3's
+! tests/test_twin_topology.py checks its restated grid facts against. Remove it once M3
+! moves to northern-islands-v1.
 Clear
 
 ! MetaCore Canonical Multi-Hazard Islanded Microgrid Model (Delft 3-Island Benchmark)

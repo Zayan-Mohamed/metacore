@@ -104,3 +104,16 @@ def test_approved_action_causal_log() -> None:
     causal_log = TemplateCausalLogger.generate_log(verdict)
     assert "verified safe" in causal_log.text
     assert len(causal_log.grounded_entities) == 0
+
+
+def test_unverified_is_never_phrased_as_safe() -> None:
+    verdict = VerificationVerdict(
+        action_id="act-unverified-001",
+        decision=Decision.DECISION_UNVERIFIED,
+        violations=[],
+        unverified_reasons=["snapshot: no load at bus 'N8'"],
+    )
+    causal_log = TemplateCausalLogger.generate_log(verdict, include_latency=False)
+    assert "NOT VERIFIED" in causal_log.text
+    assert "safe" not in causal_log.text.lower().replace("not approved", "")
+    assert "N8" in causal_log.text

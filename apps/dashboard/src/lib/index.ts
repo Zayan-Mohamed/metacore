@@ -457,7 +457,11 @@ export function pairModule3Decisions(
   return rows;
 }
 
-// Module 4: Deterministic Physics Verification & Grounded Causal Translation
+// Module 4: Risk-Certified Verification & Grounded Causal Translation
+// Gateway routers/module4.py. A verdict is Check A (the action on the recorded hour) and, in
+// "certified" mode, Check B (688 seeded scenarios of the next six hours) with its certificate.
+
+export type Module4Decision = "DECISION_APPROVE" | "DECISION_REJECT" | "DECISION_UNVERIFIED";
 
 export interface ViolationDTO {
   type:
@@ -466,7 +470,8 @@ export interface ViolationDTO {
     | "VIOLATION_TYPE_OVERVOLTAGE"
     | "VIOLATION_TYPE_THERMAL_OVERLOAD"
     | "VIOLATION_TYPE_NON_CONVERGENCE"
-    | "VIOLATION_TYPE_MALFORMED_ACTION";
+    | "VIOLATION_TYPE_MALFORMED_ACTION"
+    | "VIOLATION_TYPE_GENERATION_INADEQUATE";
   element_id: string;
   limit: number;
   measured: number;
@@ -479,6 +484,8 @@ export interface CausalLogDTO {
   text: string;
   grounded_entities: string[];
   generator: string;
+  grounded: boolean;
+  ungrounded: string[];
 }
 
 export interface GridBusState {
@@ -497,28 +504,121 @@ export interface GridLineState {
   status: "NORMAL" | "OVERLOAD" | "TRIPPED";
 }
 
+export interface IslandAdequacy {
+  island: string;
+  station: string;
+  demand_kva: number;
+  capacity_kva: number;
+  status: "ADEQUATE" | "INADEQUATE";
+}
+
+export interface RiskCertificate {
+  decision: Module4Decision;
+  n_scenarios: number;
+  n_max: number;
+  n_failures: number;
+  lower_bound: number;
+  upper_bound: number;
+  epsilon: number;
+  confidence: number;
+  stopped_early: boolean;
+  horizon_h: number;
+  limit_profile: string;
+  calibration_version: string;
+  calibration_sha256: string;
+  seed: number;
+  timestamp: string;
+  situation: { hour?: number; season?: string; hazard?: string };
+  band: { key?: string; n?: number; q_up?: number; q_down?: number };
+  pid: null | ({ enabled: boolean; storm: boolean } & Partial<{
+    p_offset: number;
+    i_term: number;
+    d_term: number;
+    extra: number;
+    updates: number;
+    recent_misses: number;
+    recent_windows: number;
+  }>);
+  corner_top_safe: boolean | null;
+  corner_bottom_safe: boolean | null;
+  failures_by_island: Record<string, number>;
+  failing_elements: Record<string, number>;
+  notes: string[];
+}
+
+export interface RiskAttribution {
+  player: string;
+  island: string;
+  buses: string[];
+  share: number;
+  fraction_of_risk: number;
+  alone: number;
+}
+
 export interface Module4VerifyResult {
   action_id: string;
-  decision: "DECISION_APPROVE" | "DECISION_REJECT";
+  decision: Module4Decision;
+  check_a_decision: Module4Decision;
+  mode: Module4Mode;
+  hour: string;
+  profile: string;
+  v_min_pu: number;
+  v_max_pu: number;
+  snapshot_source: string;
   solve_latency_ms: number;
   violations: ViolationDTO[];
+  unverified_reasons: string[];
   rejection_severity: number;
+  certificate: RiskCertificate | null;
+  attribution: RiskAttribution[];
   causal_log: CausalLogDTO;
   buses: GridBusState[];
   lines: GridLineState[];
+  adequacy: IslandAdequacy[];
+}
+
+export type Module4Mode = "certified" | "plain";
+export type Module4PidMode = "auto" | "on" | "off";
+
+export interface Module4ActionPayload {
+  action_id: string;
+  origin: "SYSTEM1" | "SYSTEM2";
+  rationale: string;
+  breakers: Array<{ edge_id: string; closed: boolean }>;
+  load_shed: Array<{ node_id: string; shed_fraction: number; priority_tier: number }>;
+  dispatch: Array<{ node_id: string; p_kw: number; q_kvar: number }>;
+  hour: string;
+  outages: string[];
 }
 
 export interface Module4Preset {
   title: string;
   description: string;
-  payload: {
-    action_id: string;
-    origin: "SYSTEM1" | "SYSTEM2";
-    rationale: string;
-    breakers: Array<{ edge_id: string; closed: boolean }>;
-    load_shed: Array<{ node_id: string; shed_fraction: number; priority_tier: number }>;
-    dispatch: Array<{ node_id: string; p_kw: number; q_kvar: number }>;
-  };
+  expected: Record<Module4Mode, Module4Decision>;
+  payload: Module4ActionPayload;
+}
+
+export interface Module4Hour {
+  timestamp: string;
+  title: string;
+  description: string;
+}
+
+export interface Module4Profile {
+  profile_id: string;
+  version: number;
+  title: string;
+  v_min_pu: number;
+  v_max_pu: number;
+  statistic: string;
+  source: string;
+  note: string;
+}
+
+export interface Module4VerifyRequest extends Module4ActionPayload {
+  profile: string;
+  mode: Module4Mode;
+  pid: Module4PidMode;
 }
 
 export class Module4RunError extends Error {
@@ -528,21 +628,24 @@ export class Module4RunError extends Error {
   }
 }
 
-export async function fetchModule4Presets(): Promise<Record<string, Module4Preset>> {
-  const res = await fetch("/api/module4/presets");
+async function getModule4<T>(path: string): Promise<T> {
+  const res = await fetch(`/api/module4/${path}`);
   if (!res.ok) {
-    throw new Module4RunError(`Failed to fetch presets (HTTP ${res.status})`, res.status);
+    throw new Module4RunError(`Failed to fetch ${path} (HTTP ${res.status})`, res.status);
   }
-  return (await res.json()) as Record<string, Module4Preset>;
+  return (await res.json()) as T;
 }
 
+export const fetchModule4Presets = () => getModule4<Record<string, Module4Preset>>("presets");
+export const fetchModule4Hours = () => getModule4<Record<string, Module4Hour>>("hours");
+export const fetchModule4Profiles = () => getModule4<Record<string, Module4Profile>>("profiles");
+
 export async function runModule4Verify(
-  payload: Module4Preset["payload"],
+  request: Module4VerifyRequest,
 ): Promise<Module4VerifyResult> {
   return postJson<Module4VerifyResult>(
     "/api/module4/verify",
-    payload,
+    request,
     (detail, status) => new Module4RunError(detail, status),
   );
 }
-

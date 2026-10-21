@@ -19,3 +19,13 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/verification"]
+
+# The root .gitignore excludes **/artifacts/*, which hatch honours; the frozen calibration must
+# still ship, or an installed verifier answers UNVERIFIED for every certificate.
+[tool.hatch.build.targets.wheel.force-include]
+"src/verification/artifacts/calibration_v1.json" = "verification/artifacts/calibration_v1.json"
+
+[tool.pytest.ini_options]
+# evaluation/ is offline tooling beside the package (not shipped in the wheel); tests import it
+# from the module root.
+pythonpath = ["."]

@@ -9,11 +9,17 @@
 //
 // DETERMINISTIC. The verdict is produced by an OpenDSS power-flow solve against a safety
 // specification. Nothing in the decision path is learned.
+//
+// v1.1 (additive only): the UNVERIFIED decision, the generation-adequacy violation, the M1
+// snapshot and limit profile on the request, and the risk certificate and Shapley risk
+// attribution on the verdict. Every v1.0 field keeps its number and meaning, so a v1.0 reader
+// parses a v1.1 verdict (it sees UNVERIFIED as the unknown enum value 3: not an approval).
 
 package verificationv1
 
 import (
 	v1 "github.com/metacore/contracts/go/common/v1"
+	v12 "github.com/metacore/contracts/go/module1/v1"
 	v11 "github.com/metacore/contracts/go/module3/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -35,6 +41,9 @@ const (
 	Decision_DECISION_UNSPECIFIED Decision = 0
 	Decision_DECISION_APPROVE     Decision = 1
 	Decision_DECISION_REJECT      Decision = 2
+	// v1.1. M4 could not establish safety (solver error, malformed snapshot, or a risk bound that
+	// straddles the target). Never an approval: M3 treats it as not approved.
+	Decision_DECISION_UNVERIFIED Decision = 3
 )
 
 // Enum value maps for Decision.
@@ -43,11 +52,13 @@ var (
 		0: "DECISION_UNSPECIFIED",
 		1: "DECISION_APPROVE",
 		2: "DECISION_REJECT",
+		3: "DECISION_UNVERIFIED",
 	}
 	Decision_value = map[string]int32{
 		"DECISION_UNSPECIFIED": 0,
 		"DECISION_APPROVE":     1,
 		"DECISION_REJECT":      2,
+		"DECISION_UNVERIFIED":  3,
 	}
 )
 
@@ -87,6 +98,8 @@ const (
 	ViolationType_VIOLATION_TYPE_THERMAL_OVERLOAD ViolationType = 3
 	ViolationType_VIOLATION_TYPE_NON_CONVERGENCE  ViolationType = 4
 	ViolationType_VIOLATION_TYPE_MALFORMED_ACTION ViolationType = 5
+	// v1.1. Island demand above the in-service generating capacity.
+	ViolationType_VIOLATION_TYPE_GENERATION_INADEQUATE ViolationType = 6
 )
 
 // Enum value maps for ViolationType.
@@ -98,14 +111,16 @@ var (
 		3: "VIOLATION_TYPE_THERMAL_OVERLOAD",
 		4: "VIOLATION_TYPE_NON_CONVERGENCE",
 		5: "VIOLATION_TYPE_MALFORMED_ACTION",
+		6: "VIOLATION_TYPE_GENERATION_INADEQUATE",
 	}
 	ViolationType_value = map[string]int32{
-		"VIOLATION_TYPE_UNSPECIFIED":      0,
-		"VIOLATION_TYPE_UNDERVOLTAGE":     1,
-		"VIOLATION_TYPE_OVERVOLTAGE":      2,
-		"VIOLATION_TYPE_THERMAL_OVERLOAD": 3,
-		"VIOLATION_TYPE_NON_CONVERGENCE":  4,
-		"VIOLATION_TYPE_MALFORMED_ACTION": 5,
+		"VIOLATION_TYPE_UNSPECIFIED":           0,
+		"VIOLATION_TYPE_UNDERVOLTAGE":          1,
+		"VIOLATION_TYPE_OVERVOLTAGE":           2,
+		"VIOLATION_TYPE_THERMAL_OVERLOAD":      3,
+		"VIOLATION_TYPE_NON_CONVERGENCE":       4,
+		"VIOLATION_TYPE_MALFORMED_ACTION":      5,
+		"VIOLATION_TYPE_GENERATION_INADEQUATE": 6,
 	}
 )
 
@@ -186,10 +201,14 @@ func (Generator) EnumDescriptor() ([]byte, []int) {
 }
 
 type VerificationRequest struct {
-	state         protoimpl.MessageState     `protogen:"open.v1"`
-	Envelope      *v1.Envelope               `protobuf:"bytes,1,opt,name=envelope,proto3" json:"envelope,omitempty"`
-	Action        *v11.ProposedControlAction `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
-	TopologyId    string                     `protobuf:"bytes,3,opt,name=topology_id,json=topologyId,proto3" json:"topology_id,omitempty"`
+	state      protoimpl.MessageState     `protogen:"open.v1"`
+	Envelope   *v1.Envelope               `protobuf:"bytes,1,opt,name=envelope,proto3" json:"envelope,omitempty"`
+	Action     *v11.ProposedControlAction `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	TopologyId string                     `protobuf:"bytes,3,opt,name=topology_id,json=topologyId,proto3" json:"topology_id,omitempty"`
+	// v1.1: the hour the action is judged on. Without it the risk certificate cannot be issued
+	// and the verdict is UNVERIFIED.
+	Snapshot      *v12.GridStateSnapshot `protobuf:"bytes,4,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	LimitProfile  string                 `protobuf:"bytes,5,opt,name=limit_profile,json=limitProfile,proto3" json:"limit_profile,omitempty"` // e.g. "METACORE-STRICT"; empty -> the default profile
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -245,6 +264,20 @@ func (x *VerificationRequest) GetTopologyId() string {
 	return ""
 }
 
+func (x *VerificationRequest) GetSnapshot() *v12.GridStateSnapshot {
+	if x != nil {
+		return x.Snapshot
+	}
+	return nil
+}
+
+func (x *VerificationRequest) GetLimitProfile() string {
+	if x != nil {
+		return x.LimitProfile
+	}
+	return ""
+}
+
 type VerificationVerdict struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	Envelope            *v1.Envelope           `protobuf:"bytes,1,opt,name=envelope,proto3" json:"envelope,omitempty"`
@@ -254,8 +287,13 @@ type VerificationVerdict struct {
 	SolveLatencyMs      float64                `protobuf:"fixed64,5,opt,name=solve_latency_ms,json=solveLatencyMs,proto3" json:"solve_latency_ms,omitempty"`
 	SpecVersion         string                 `protobuf:"bytes,6,opt,name=spec_version,json=specVersion,proto3" json:"spec_version,omitempty"` // the safety specification this was judged against
 	NetworkModelVersion string                 `protobuf:"bytes,7,opt,name=network_model_version,json=networkModelVersion,proto3" json:"network_model_version,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// v1.1
+	Certificate       *RiskCertificate   `protobuf:"bytes,8,opt,name=certificate,proto3" json:"certificate,omitempty"`                                       // unset for a Check A rejection
+	Attribution       []*RiskAttribution `protobuf:"bytes,9,rep,name=attribution,proto3" json:"attribution,omitempty"`                                       // empty when no scenario failed
+	LimitProfile      string             `protobuf:"bytes,10,opt,name=limit_profile,json=limitProfile,proto3" json:"limit_profile,omitempty"`                // versioned, e.g. "METACORE-STRICT-v1"
+	UnverifiedReasons []string           `protobuf:"bytes,11,rep,name=unverified_reasons,json=unverifiedReasons,proto3" json:"unverified_reasons,omitempty"` // why, when decision is UNVERIFIED
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *VerificationVerdict) Reset() {
@@ -337,6 +375,358 @@ func (x *VerificationVerdict) GetNetworkModelVersion() string {
 	return ""
 }
 
+func (x *VerificationVerdict) GetCertificate() *RiskCertificate {
+	if x != nil {
+		return x.Certificate
+	}
+	return nil
+}
+
+func (x *VerificationVerdict) GetAttribution() []*RiskAttribution {
+	if x != nil {
+		return x.Attribution
+	}
+	return nil
+}
+
+func (x *VerificationVerdict) GetLimitProfile() string {
+	if x != nil {
+		return x.LimitProfile
+	}
+	return ""
+}
+
+func (x *VerificationVerdict) GetUnverifiedReasons() []string {
+	if x != nil {
+		return x.UnverifiedReasons
+	}
+	return nil
+}
+
+// v1.1. Check B: k of N seeded scenarios of the next hours broke a limit, with exact
+// Clopper-Pearson bounds on the true rate. Holds everything a replay needs and nothing
+// time-dependent, so the same input gives the same bytes.
+type RiskCertificate struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Decision           Decision               `protobuf:"varint,1,opt,name=decision,proto3,enum=metacore.verification.v1.Decision" json:"decision,omitempty"`
+	NScenarios         uint32                 `protobuf:"varint,2,opt,name=n_scenarios,json=nScenarios,proto3" json:"n_scenarios,omitempty"`
+	NMax               uint32                 `protobuf:"varint,3,opt,name=n_max,json=nMax,proto3" json:"n_max,omitempty"`
+	NFailures          uint32                 `protobuf:"varint,4,opt,name=n_failures,json=nFailures,proto3" json:"n_failures,omitempty"`
+	LowerBound         float64                `protobuf:"fixed64,5,opt,name=lower_bound,json=lowerBound,proto3" json:"lower_bound,omitempty"`
+	UpperBound         float64                `protobuf:"fixed64,6,opt,name=upper_bound,json=upperBound,proto3" json:"upper_bound,omitempty"`
+	Epsilon            float64                `protobuf:"fixed64,7,opt,name=epsilon,proto3" json:"epsilon,omitempty"`
+	Confidence         float64                `protobuf:"fixed64,8,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	StoppedEarly       bool                   `protobuf:"varint,9,opt,name=stopped_early,json=stoppedEarly,proto3" json:"stopped_early,omitempty"`
+	HorizonH           uint32                 `protobuf:"varint,10,opt,name=horizon_h,json=horizonH,proto3" json:"horizon_h,omitempty"`
+	LimitProfile       string                 `protobuf:"bytes,11,opt,name=limit_profile,json=limitProfile,proto3" json:"limit_profile,omitempty"`
+	CalibrationVersion string                 `protobuf:"bytes,12,opt,name=calibration_version,json=calibrationVersion,proto3" json:"calibration_version,omitempty"`
+	CalibrationSha256  string                 `protobuf:"bytes,13,opt,name=calibration_sha256,json=calibrationSha256,proto3" json:"calibration_sha256,omitempty"`
+	Seed               uint64                 `protobuf:"varint,14,opt,name=seed,proto3" json:"seed,omitempty"`
+	Timestamp          string                 `protobuf:"bytes,15,opt,name=timestamp,proto3" json:"timestamp,omitempty"`                           // the recorded hour (local time) the snapshot describes
+	SituationKey       string                 `protobuf:"bytes,16,opt,name=situation_key,json=situationKey,proto3" json:"situation_key,omitempty"` // calibration group the band came from
+	BandUp             float64                `protobuf:"fixed64,17,opt,name=band_up,json=bandUp,proto3" json:"band_up,omitempty"`                 // band edges, fractions of this hour's demand
+	BandDown           float64                `protobuf:"fixed64,18,opt,name=band_down,json=bandDown,proto3" json:"band_down,omitempty"`
+	PidEnabled         bool                   `protobuf:"varint,19,opt,name=pid_enabled,json=pidEnabled,proto3" json:"pid_enabled,omitempty"` // conformal PID (storm mode)
+	PidExtra           float64                `protobuf:"fixed64,20,opt,name=pid_extra,json=pidExtra,proto3" json:"pid_extra,omitempty"`      // total P + I + D widening applied
+	CornerTopSafe      bool                   `protobuf:"varint,21,opt,name=corner_top_safe,json=cornerTopSafe,proto3" json:"corner_top_safe,omitempty"`
+	CornerBottomSafe   bool                   `protobuf:"varint,22,opt,name=corner_bottom_safe,json=cornerBottomSafe,proto3" json:"corner_bottom_safe,omitempty"`
+	FailuresByIsland   map[string]uint32      `protobuf:"bytes,23,rep,name=failures_by_island,json=failuresByIsland,proto3" json:"failures_by_island,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	FailingElements    map[string]uint32      `protobuf:"bytes,24,rep,name=failing_elements,json=failingElements,proto3" json:"failing_elements,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	Notes              []string               `protobuf:"bytes,25,rep,name=notes,proto3" json:"notes,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *RiskCertificate) Reset() {
+	*x = RiskCertificate{}
+	mi := &file_verification_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RiskCertificate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RiskCertificate) ProtoMessage() {}
+
+func (x *RiskCertificate) ProtoReflect() protoreflect.Message {
+	mi := &file_verification_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RiskCertificate.ProtoReflect.Descriptor instead.
+func (*RiskCertificate) Descriptor() ([]byte, []int) {
+	return file_verification_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RiskCertificate) GetDecision() Decision {
+	if x != nil {
+		return x.Decision
+	}
+	return Decision_DECISION_UNSPECIFIED
+}
+
+func (x *RiskCertificate) GetNScenarios() uint32 {
+	if x != nil {
+		return x.NScenarios
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetNMax() uint32 {
+	if x != nil {
+		return x.NMax
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetNFailures() uint32 {
+	if x != nil {
+		return x.NFailures
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetLowerBound() float64 {
+	if x != nil {
+		return x.LowerBound
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetUpperBound() float64 {
+	if x != nil {
+		return x.UpperBound
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetEpsilon() float64 {
+	if x != nil {
+		return x.Epsilon
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetConfidence() float64 {
+	if x != nil {
+		return x.Confidence
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetStoppedEarly() bool {
+	if x != nil {
+		return x.StoppedEarly
+	}
+	return false
+}
+
+func (x *RiskCertificate) GetHorizonH() uint32 {
+	if x != nil {
+		return x.HorizonH
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetLimitProfile() string {
+	if x != nil {
+		return x.LimitProfile
+	}
+	return ""
+}
+
+func (x *RiskCertificate) GetCalibrationVersion() string {
+	if x != nil {
+		return x.CalibrationVersion
+	}
+	return ""
+}
+
+func (x *RiskCertificate) GetCalibrationSha256() string {
+	if x != nil {
+		return x.CalibrationSha256
+	}
+	return ""
+}
+
+func (x *RiskCertificate) GetSeed() uint64 {
+	if x != nil {
+		return x.Seed
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+func (x *RiskCertificate) GetSituationKey() string {
+	if x != nil {
+		return x.SituationKey
+	}
+	return ""
+}
+
+func (x *RiskCertificate) GetBandUp() float64 {
+	if x != nil {
+		return x.BandUp
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetBandDown() float64 {
+	if x != nil {
+		return x.BandDown
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetPidEnabled() bool {
+	if x != nil {
+		return x.PidEnabled
+	}
+	return false
+}
+
+func (x *RiskCertificate) GetPidExtra() float64 {
+	if x != nil {
+		return x.PidExtra
+	}
+	return 0
+}
+
+func (x *RiskCertificate) GetCornerTopSafe() bool {
+	if x != nil {
+		return x.CornerTopSafe
+	}
+	return false
+}
+
+func (x *RiskCertificate) GetCornerBottomSafe() bool {
+	if x != nil {
+		return x.CornerBottomSafe
+	}
+	return false
+}
+
+func (x *RiskCertificate) GetFailuresByIsland() map[string]uint32 {
+	if x != nil {
+		return x.FailuresByIsland
+	}
+	return nil
+}
+
+func (x *RiskCertificate) GetFailingElements() map[string]uint32 {
+	if x != nil {
+		return x.FailingElements
+	}
+	return nil
+}
+
+func (x *RiskCertificate) GetNotes() []string {
+	if x != nil {
+		return x.Notes
+	}
+	return nil
+}
+
+// v1.1. One player's Shapley share of the certified failure rate; shares sum to k / N.
+type RiskAttribution struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Player         string                 `protobuf:"bytes,1,opt,name=player,proto3" json:"player,omitempty"` // a feeder-group bus or an island name from the topology
+	Island         string                 `protobuf:"bytes,2,opt,name=island,proto3" json:"island,omitempty"`
+	Buses          []string               `protobuf:"bytes,3,rep,name=buses,proto3" json:"buses,omitempty"`
+	Share          float64                `protobuf:"fixed64,4,opt,name=share,proto3" json:"share,omitempty"`
+	FractionOfRisk float64                `protobuf:"fixed64,5,opt,name=fraction_of_risk,json=fractionOfRisk,proto3" json:"fraction_of_risk,omitempty"`
+	Alone          float64                `protobuf:"fixed64,6,opt,name=alone,proto3" json:"alone,omitempty"` // failure rate when only this player moves
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RiskAttribution) Reset() {
+	*x = RiskAttribution{}
+	mi := &file_verification_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RiskAttribution) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RiskAttribution) ProtoMessage() {}
+
+func (x *RiskAttribution) ProtoReflect() protoreflect.Message {
+	mi := &file_verification_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RiskAttribution.ProtoReflect.Descriptor instead.
+func (*RiskAttribution) Descriptor() ([]byte, []int) {
+	return file_verification_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *RiskAttribution) GetPlayer() string {
+	if x != nil {
+		return x.Player
+	}
+	return ""
+}
+
+func (x *RiskAttribution) GetIsland() string {
+	if x != nil {
+		return x.Island
+	}
+	return ""
+}
+
+func (x *RiskAttribution) GetBuses() []string {
+	if x != nil {
+		return x.Buses
+	}
+	return nil
+}
+
+func (x *RiskAttribution) GetShare() float64 {
+	if x != nil {
+		return x.Share
+	}
+	return 0
+}
+
+func (x *RiskAttribution) GetFractionOfRisk() float64 {
+	if x != nil {
+		return x.FractionOfRisk
+	}
+	return 0
+}
+
+func (x *RiskAttribution) GetAlone() float64 {
+	if x != nil {
+		return x.Alone
+	}
+	return 0
+}
+
 // Structured violation evidence — the analytical core of the abductive claim, and the payload
 // the causal log is generated from. A generated explanation may only reference entities present
 // here; anything else is an ungrounded claim.
@@ -355,7 +745,7 @@ type Violation struct {
 
 func (x *Violation) Reset() {
 	*x = Violation{}
-	mi := &file_verification_proto_msgTypes[2]
+	mi := &file_verification_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -367,7 +757,7 @@ func (x *Violation) String() string {
 func (*Violation) ProtoMessage() {}
 
 func (x *Violation) ProtoReflect() protoreflect.Message {
-	mi := &file_verification_proto_msgTypes[2]
+	mi := &file_verification_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -380,7 +770,7 @@ func (x *Violation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Violation.ProtoReflect.Descriptor instead.
 func (*Violation) Descriptor() ([]byte, []int) {
-	return file_verification_proto_rawDescGZIP(), []int{2}
+	return file_verification_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Violation) GetType() ViolationType {
@@ -438,7 +828,7 @@ type RejectionTrace struct {
 
 func (x *RejectionTrace) Reset() {
 	*x = RejectionTrace{}
-	mi := &file_verification_proto_msgTypes[3]
+	mi := &file_verification_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -450,7 +840,7 @@ func (x *RejectionTrace) String() string {
 func (*RejectionTrace) ProtoMessage() {}
 
 func (x *RejectionTrace) ProtoReflect() protoreflect.Message {
-	mi := &file_verification_proto_msgTypes[3]
+	mi := &file_verification_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -463,7 +853,7 @@ func (x *RejectionTrace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectionTrace.ProtoReflect.Descriptor instead.
 func (*RejectionTrace) Descriptor() ([]byte, []int) {
-	return file_verification_proto_rawDescGZIP(), []int{3}
+	return file_verification_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RejectionTrace) GetEnvelope() *v1.Envelope {
@@ -508,7 +898,7 @@ type CausalLog struct {
 
 func (x *CausalLog) Reset() {
 	*x = CausalLog{}
-	mi := &file_verification_proto_msgTypes[4]
+	mi := &file_verification_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -520,7 +910,7 @@ func (x *CausalLog) String() string {
 func (*CausalLog) ProtoMessage() {}
 
 func (x *CausalLog) ProtoReflect() protoreflect.Message {
-	mi := &file_verification_proto_msgTypes[4]
+	mi := &file_verification_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -533,7 +923,7 @@ func (x *CausalLog) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CausalLog.ProtoReflect.Descriptor instead.
 func (*CausalLog) Descriptor() ([]byte, []int) {
-	return file_verification_proto_rawDescGZIP(), []int{4}
+	return file_verification_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CausalLog) GetEnvelope() *v1.Envelope {
@@ -580,7 +970,7 @@ type RejectionRequest struct {
 
 func (x *RejectionRequest) Reset() {
 	*x = RejectionRequest{}
-	mi := &file_verification_proto_msgTypes[5]
+	mi := &file_verification_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -592,7 +982,7 @@ func (x *RejectionRequest) String() string {
 func (*RejectionRequest) ProtoMessage() {}
 
 func (x *RejectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_verification_proto_msgTypes[5]
+	mi := &file_verification_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -605,7 +995,7 @@ func (x *RejectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectionRequest.ProtoReflect.Descriptor instead.
 func (*RejectionRequest) Descriptor() ([]byte, []int) {
-	return file_verification_proto_rawDescGZIP(), []int{5}
+	return file_verification_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RejectionRequest) GetScenario() *v1.ScenarioRef {
@@ -623,7 +1013,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_verification_proto_msgTypes[6]
+	mi := &file_verification_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -635,7 +1025,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_verification_proto_msgTypes[6]
+	mi := &file_verification_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -648,19 +1038,21 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_verification_proto_rawDescGZIP(), []int{6}
+	return file_verification_proto_rawDescGZIP(), []int{8}
 }
 
 var File_verification_proto protoreflect.FileDescriptor
 
 const file_verification_proto_rawDesc = "" +
 	"\n" +
-	"\x12verification.proto\x12\x18metacore.verification.v1\x1a\fcommon.proto\x1a\rmodule3.proto\"\xb4\x01\n" +
+	"\x12verification.proto\x12\x18metacore.verification.v1\x1a\fcommon.proto\x1a\rmodule1.proto\x1a\rmodule3.proto\"\x9d\x02\n" +
 	"\x13VerificationRequest\x128\n" +
 	"\benvelope\x18\x01 \x01(\v2\x1c.metacore.common.v1.EnvelopeR\benvelope\x12B\n" +
 	"\x06action\x18\x02 \x01(\v2*.metacore.module3.v1.ProposedControlActionR\x06action\x12\x1f\n" +
 	"\vtopology_id\x18\x03 \x01(\tR\n" +
-	"topologyId\"\xf2\x02\n" +
+	"topologyId\x12B\n" +
+	"\bsnapshot\x18\x04 \x01(\v2&.metacore.module1.v1.GridStateSnapshotR\bsnapshot\x12#\n" +
+	"\rlimit_profile\x18\x05 \x01(\tR\flimitProfile\"\xe0\x04\n" +
 	"\x13VerificationVerdict\x128\n" +
 	"\benvelope\x18\x01 \x01(\v2\x1c.metacore.common.v1.EnvelopeR\benvelope\x12\x1b\n" +
 	"\taction_id\x18\x02 \x01(\tR\bactionId\x12>\n" +
@@ -670,7 +1062,59 @@ const file_verification_proto_rawDesc = "" +
 	"violations\x12(\n" +
 	"\x10solve_latency_ms\x18\x05 \x01(\x01R\x0esolveLatencyMs\x12!\n" +
 	"\fspec_version\x18\x06 \x01(\tR\vspecVersion\x122\n" +
-	"\x15network_model_version\x18\a \x01(\tR\x13networkModelVersion\"\xf5\x01\n" +
+	"\x15network_model_version\x18\a \x01(\tR\x13networkModelVersion\x12K\n" +
+	"\vcertificate\x18\b \x01(\v2).metacore.verification.v1.RiskCertificateR\vcertificate\x12K\n" +
+	"\vattribution\x18\t \x03(\v2).metacore.verification.v1.RiskAttributionR\vattribution\x12#\n" +
+	"\rlimit_profile\x18\n" +
+	" \x01(\tR\flimitProfile\x12-\n" +
+	"\x12unverified_reasons\x18\v \x03(\tR\x11unverifiedReasons\"\x83\t\n" +
+	"\x0fRiskCertificate\x12>\n" +
+	"\bdecision\x18\x01 \x01(\x0e2\".metacore.verification.v1.DecisionR\bdecision\x12\x1f\n" +
+	"\vn_scenarios\x18\x02 \x01(\rR\n" +
+	"nScenarios\x12\x13\n" +
+	"\x05n_max\x18\x03 \x01(\rR\x04nMax\x12\x1d\n" +
+	"\n" +
+	"n_failures\x18\x04 \x01(\rR\tnFailures\x12\x1f\n" +
+	"\vlower_bound\x18\x05 \x01(\x01R\n" +
+	"lowerBound\x12\x1f\n" +
+	"\vupper_bound\x18\x06 \x01(\x01R\n" +
+	"upperBound\x12\x18\n" +
+	"\aepsilon\x18\a \x01(\x01R\aepsilon\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\b \x01(\x01R\n" +
+	"confidence\x12#\n" +
+	"\rstopped_early\x18\t \x01(\bR\fstoppedEarly\x12\x1b\n" +
+	"\thorizon_h\x18\n" +
+	" \x01(\rR\bhorizonH\x12#\n" +
+	"\rlimit_profile\x18\v \x01(\tR\flimitProfile\x12/\n" +
+	"\x13calibration_version\x18\f \x01(\tR\x12calibrationVersion\x12-\n" +
+	"\x12calibration_sha256\x18\r \x01(\tR\x11calibrationSha256\x12\x12\n" +
+	"\x04seed\x18\x0e \x01(\x04R\x04seed\x12\x1c\n" +
+	"\ttimestamp\x18\x0f \x01(\tR\ttimestamp\x12#\n" +
+	"\rsituation_key\x18\x10 \x01(\tR\fsituationKey\x12\x17\n" +
+	"\aband_up\x18\x11 \x01(\x01R\x06bandUp\x12\x1b\n" +
+	"\tband_down\x18\x12 \x01(\x01R\bbandDown\x12\x1f\n" +
+	"\vpid_enabled\x18\x13 \x01(\bR\n" +
+	"pidEnabled\x12\x1b\n" +
+	"\tpid_extra\x18\x14 \x01(\x01R\bpidExtra\x12&\n" +
+	"\x0fcorner_top_safe\x18\x15 \x01(\bR\rcornerTopSafe\x12,\n" +
+	"\x12corner_bottom_safe\x18\x16 \x01(\bR\x10cornerBottomSafe\x12m\n" +
+	"\x12failures_by_island\x18\x17 \x03(\v2?.metacore.verification.v1.RiskCertificate.FailuresByIslandEntryR\x10failuresByIsland\x12i\n" +
+	"\x10failing_elements\x18\x18 \x03(\v2>.metacore.verification.v1.RiskCertificate.FailingElementsEntryR\x0ffailingElements\x12\x14\n" +
+	"\x05notes\x18\x19 \x03(\tR\x05notes\x1aC\n" +
+	"\x15FailuresByIslandEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1aB\n" +
+	"\x14FailingElementsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xad\x01\n" +
+	"\x0fRiskAttribution\x12\x16\n" +
+	"\x06player\x18\x01 \x01(\tR\x06player\x12\x16\n" +
+	"\x06island\x18\x02 \x01(\tR\x06island\x12\x14\n" +
+	"\x05buses\x18\x03 \x03(\tR\x05buses\x12\x14\n" +
+	"\x05share\x18\x04 \x01(\x01R\x05share\x12(\n" +
+	"\x10fraction_of_risk\x18\x05 \x01(\x01R\x0efractionOfRisk\x12\x14\n" +
+	"\x05alone\x18\x06 \x01(\x01R\x05alone\"\xf5\x01\n" +
 	"\tViolation\x12;\n" +
 	"\x04type\x18\x01 \x01(\x0e2'.metacore.verification.v1.ViolationTypeR\x04type\x12\x1d\n" +
 	"\n" +
@@ -694,18 +1138,20 @@ const file_verification_proto_rawDesc = "" +
 	"\tgenerator\x18\x05 \x01(\x0e2#.metacore.verification.v1.GeneratorR\tgenerator\"O\n" +
 	"\x10RejectionRequest\x12;\n" +
 	"\bscenario\x18\x01 \x01(\v2\x1f.metacore.common.v1.ScenarioRefR\bscenario\"\x0f\n" +
-	"\rHealthRequest*O\n" +
+	"\rHealthRequest*h\n" +
 	"\bDecision\x12\x18\n" +
 	"\x14DECISION_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10DECISION_APPROVE\x10\x01\x12\x13\n" +
-	"\x0fDECISION_REJECT\x10\x02*\xde\x01\n" +
+	"\x0fDECISION_REJECT\x10\x02\x12\x17\n" +
+	"\x13DECISION_UNVERIFIED\x10\x03*\x88\x02\n" +
 	"\rViolationType\x12\x1e\n" +
 	"\x1aVIOLATION_TYPE_UNSPECIFIED\x10\x00\x12\x1f\n" +
 	"\x1bVIOLATION_TYPE_UNDERVOLTAGE\x10\x01\x12\x1e\n" +
 	"\x1aVIOLATION_TYPE_OVERVOLTAGE\x10\x02\x12#\n" +
 	"\x1fVIOLATION_TYPE_THERMAL_OVERLOAD\x10\x03\x12\"\n" +
 	"\x1eVIOLATION_TYPE_NON_CONVERGENCE\x10\x04\x12#\n" +
-	"\x1fVIOLATION_TYPE_MALFORMED_ACTION\x10\x05*Y\n" +
+	"\x1fVIOLATION_TYPE_MALFORMED_ACTION\x10\x05\x12(\n" +
+	"$VIOLATION_TYPE_GENERATION_INADEQUATE\x10\x06*Y\n" +
 	"\tGenerator\x12\x19\n" +
 	"\x15GENERATOR_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12GENERATOR_TEMPLATE\x10\x01\x12\x19\n" +
@@ -730,48 +1176,59 @@ func file_verification_proto_rawDescGZIP() []byte {
 }
 
 var file_verification_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_verification_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_verification_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_verification_proto_goTypes = []any{
 	(Decision)(0),                     // 0: metacore.verification.v1.Decision
 	(ViolationType)(0),                // 1: metacore.verification.v1.ViolationType
 	(Generator)(0),                    // 2: metacore.verification.v1.Generator
 	(*VerificationRequest)(nil),       // 3: metacore.verification.v1.VerificationRequest
 	(*VerificationVerdict)(nil),       // 4: metacore.verification.v1.VerificationVerdict
-	(*Violation)(nil),                 // 5: metacore.verification.v1.Violation
-	(*RejectionTrace)(nil),            // 6: metacore.verification.v1.RejectionTrace
-	(*CausalLog)(nil),                 // 7: metacore.verification.v1.CausalLog
-	(*RejectionRequest)(nil),          // 8: metacore.verification.v1.RejectionRequest
-	(*HealthRequest)(nil),             // 9: metacore.verification.v1.HealthRequest
-	(*v1.Envelope)(nil),               // 10: metacore.common.v1.Envelope
-	(*v11.ProposedControlAction)(nil), // 11: metacore.module3.v1.ProposedControlAction
-	(*v1.ScenarioRef)(nil),            // 12: metacore.common.v1.ScenarioRef
-	(*v1.Health)(nil),                 // 13: metacore.common.v1.Health
+	(*RiskCertificate)(nil),           // 5: metacore.verification.v1.RiskCertificate
+	(*RiskAttribution)(nil),           // 6: metacore.verification.v1.RiskAttribution
+	(*Violation)(nil),                 // 7: metacore.verification.v1.Violation
+	(*RejectionTrace)(nil),            // 8: metacore.verification.v1.RejectionTrace
+	(*CausalLog)(nil),                 // 9: metacore.verification.v1.CausalLog
+	(*RejectionRequest)(nil),          // 10: metacore.verification.v1.RejectionRequest
+	(*HealthRequest)(nil),             // 11: metacore.verification.v1.HealthRequest
+	nil,                               // 12: metacore.verification.v1.RiskCertificate.FailuresByIslandEntry
+	nil,                               // 13: metacore.verification.v1.RiskCertificate.FailingElementsEntry
+	(*v1.Envelope)(nil),               // 14: metacore.common.v1.Envelope
+	(*v11.ProposedControlAction)(nil), // 15: metacore.module3.v1.ProposedControlAction
+	(*v12.GridStateSnapshot)(nil),     // 16: metacore.module1.v1.GridStateSnapshot
+	(*v1.ScenarioRef)(nil),            // 17: metacore.common.v1.ScenarioRef
+	(*v1.Health)(nil),                 // 18: metacore.common.v1.Health
 }
 var file_verification_proto_depIdxs = []int32{
-	10, // 0: metacore.verification.v1.VerificationRequest.envelope:type_name -> metacore.common.v1.Envelope
-	11, // 1: metacore.verification.v1.VerificationRequest.action:type_name -> metacore.module3.v1.ProposedControlAction
-	10, // 2: metacore.verification.v1.VerificationVerdict.envelope:type_name -> metacore.common.v1.Envelope
-	0,  // 3: metacore.verification.v1.VerificationVerdict.decision:type_name -> metacore.verification.v1.Decision
-	5,  // 4: metacore.verification.v1.VerificationVerdict.violations:type_name -> metacore.verification.v1.Violation
-	1,  // 5: metacore.verification.v1.Violation.type:type_name -> metacore.verification.v1.ViolationType
-	10, // 6: metacore.verification.v1.RejectionTrace.envelope:type_name -> metacore.common.v1.Envelope
-	5,  // 7: metacore.verification.v1.RejectionTrace.violations:type_name -> metacore.verification.v1.Violation
-	10, // 8: metacore.verification.v1.CausalLog.envelope:type_name -> metacore.common.v1.Envelope
-	2,  // 9: metacore.verification.v1.CausalLog.generator:type_name -> metacore.verification.v1.Generator
-	12, // 10: metacore.verification.v1.RejectionRequest.scenario:type_name -> metacore.common.v1.ScenarioRef
-	3,  // 11: metacore.verification.v1.VerificationService.Verify:input_type -> metacore.verification.v1.VerificationRequest
-	8,  // 12: metacore.verification.v1.VerificationService.StreamRejections:input_type -> metacore.verification.v1.RejectionRequest
-	8,  // 13: metacore.verification.v1.VerificationService.StreamCausalLogs:input_type -> metacore.verification.v1.RejectionRequest
-	9,  // 14: metacore.verification.v1.VerificationService.Health:input_type -> metacore.verification.v1.HealthRequest
-	4,  // 15: metacore.verification.v1.VerificationService.Verify:output_type -> metacore.verification.v1.VerificationVerdict
-	6,  // 16: metacore.verification.v1.VerificationService.StreamRejections:output_type -> metacore.verification.v1.RejectionTrace
-	7,  // 17: metacore.verification.v1.VerificationService.StreamCausalLogs:output_type -> metacore.verification.v1.CausalLog
-	13, // 18: metacore.verification.v1.VerificationService.Health:output_type -> metacore.common.v1.Health
-	15, // [15:19] is the sub-list for method output_type
-	11, // [11:15] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	14, // 0: metacore.verification.v1.VerificationRequest.envelope:type_name -> metacore.common.v1.Envelope
+	15, // 1: metacore.verification.v1.VerificationRequest.action:type_name -> metacore.module3.v1.ProposedControlAction
+	16, // 2: metacore.verification.v1.VerificationRequest.snapshot:type_name -> metacore.module1.v1.GridStateSnapshot
+	14, // 3: metacore.verification.v1.VerificationVerdict.envelope:type_name -> metacore.common.v1.Envelope
+	0,  // 4: metacore.verification.v1.VerificationVerdict.decision:type_name -> metacore.verification.v1.Decision
+	7,  // 5: metacore.verification.v1.VerificationVerdict.violations:type_name -> metacore.verification.v1.Violation
+	5,  // 6: metacore.verification.v1.VerificationVerdict.certificate:type_name -> metacore.verification.v1.RiskCertificate
+	6,  // 7: metacore.verification.v1.VerificationVerdict.attribution:type_name -> metacore.verification.v1.RiskAttribution
+	0,  // 8: metacore.verification.v1.RiskCertificate.decision:type_name -> metacore.verification.v1.Decision
+	12, // 9: metacore.verification.v1.RiskCertificate.failures_by_island:type_name -> metacore.verification.v1.RiskCertificate.FailuresByIslandEntry
+	13, // 10: metacore.verification.v1.RiskCertificate.failing_elements:type_name -> metacore.verification.v1.RiskCertificate.FailingElementsEntry
+	1,  // 11: metacore.verification.v1.Violation.type:type_name -> metacore.verification.v1.ViolationType
+	14, // 12: metacore.verification.v1.RejectionTrace.envelope:type_name -> metacore.common.v1.Envelope
+	7,  // 13: metacore.verification.v1.RejectionTrace.violations:type_name -> metacore.verification.v1.Violation
+	14, // 14: metacore.verification.v1.CausalLog.envelope:type_name -> metacore.common.v1.Envelope
+	2,  // 15: metacore.verification.v1.CausalLog.generator:type_name -> metacore.verification.v1.Generator
+	17, // 16: metacore.verification.v1.RejectionRequest.scenario:type_name -> metacore.common.v1.ScenarioRef
+	3,  // 17: metacore.verification.v1.VerificationService.Verify:input_type -> metacore.verification.v1.VerificationRequest
+	10, // 18: metacore.verification.v1.VerificationService.StreamRejections:input_type -> metacore.verification.v1.RejectionRequest
+	10, // 19: metacore.verification.v1.VerificationService.StreamCausalLogs:input_type -> metacore.verification.v1.RejectionRequest
+	11, // 20: metacore.verification.v1.VerificationService.Health:input_type -> metacore.verification.v1.HealthRequest
+	4,  // 21: metacore.verification.v1.VerificationService.Verify:output_type -> metacore.verification.v1.VerificationVerdict
+	8,  // 22: metacore.verification.v1.VerificationService.StreamRejections:output_type -> metacore.verification.v1.RejectionTrace
+	9,  // 23: metacore.verification.v1.VerificationService.StreamCausalLogs:output_type -> metacore.verification.v1.CausalLog
+	18, // 24: metacore.verification.v1.VerificationService.Health:output_type -> metacore.common.v1.Health
+	21, // [21:25] is the sub-list for method output_type
+	17, // [17:21] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_verification_proto_init() }
@@ -785,7 +1242,7 @@ func file_verification_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_verification_proto_rawDesc), len(file_verification_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   7,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

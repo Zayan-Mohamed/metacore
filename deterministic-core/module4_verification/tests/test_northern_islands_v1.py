@@ -1,10 +1,11 @@
-"""The draft M1 -> M4 topology (northern-islands-v1) under M4's own physics.
+"""The shared M1 -> M4 topology (northern-islands-v1) under M4's own physics.
 
 M1 generates the model and the snapshot fixtures but may not import OpenDSS (ADR 0003), so this
 is where they are compiled and solved. The files are read by path from the contracts package:
 this lane installs M4 alone and must not depend on Module 1's code.
 
-Nothing here changes M4's default model: CircuitTwin() is still delft_3island.
+northern-islands-v1 is M4's default model. M4 ships a vendored copy (so the module builds on its
+own); the tests below hold it byte-identical to the contracts copy.
 """
 
 from __future__ import annotations
@@ -15,7 +16,12 @@ from pathlib import Path
 import opendssdirect as dss
 import pytest
 from verification.firewall.verifier import PhysicsVerifier
-from verification.opendss.circuit import DEFAULT_TOPOLOGY_ID, CircuitTwin
+from verification.opendss.circuit import (
+    DEFAULT_MODEL_PATH,
+    DEFAULT_PIN_PATH,
+    DEFAULT_TOPOLOGY_ID,
+    CircuitTwin,
+)
 from verification.types import (
     BreakerCommand,
     Decision,
@@ -27,7 +33,9 @@ from verification.types import (
 CONTRACTS = (Path(__file__).resolve().parents[3] / "packages" / "contracts" / "python"
              / "metacore_contracts")
 DSS = CONTRACTS / "topology" / "northern_islands_v1.dss"
-PIN = json.loads((CONTRACTS / "schema" / "module1_topology_v1.json").read_text())
+PIN_PATH = CONTRACTS / "schema" / "module1_topology_v1.json"
+PIN = json.loads(PIN_PATH.read_text())
+GOLDEN = Path(__file__).parent / "golden" / "ditwah_evening_noop.json"
 TOPOLOGY_ID = PIN["topology_id"]
 
 
@@ -121,19 +129,21 @@ def test_load_shed_is_a_fraction_of_the_snapshot_demand() -> None:
     assert v.verify(shed, snapshot=snap).decision == Decision.DECISION_APPROVE
 
 
-def test_a_snapshot_for_another_topology_is_rejected() -> None:
+def test_a_snapshot_for_another_topology_is_unverified() -> None:
+    """M4 does not know the state it would judge: not approved, and not the action's fault."""
     snap = dict(sample("calm"), topology_id="delft-3island-v0")
     verdict = PhysicsVerifier(twin()).verify(noop(), snapshot=snap)
-    assert verdict.decision == Decision.DECISION_REJECT
-    assert verdict.violations[0].type == ViolationType.VIOLATION_TYPE_MALFORMED_ACTION
+    assert verdict.decision == Decision.DECISION_UNVERIFIED
+    assert "topology" in verdict.unverified_reasons[0]
 
 
-def test_a_snapshot_naming_an_unknown_bus_is_rejected() -> None:
+def test_a_snapshot_naming_an_unknown_bus_is_unverified() -> None:
     snap = sample("calm")
     snap["node_states"].append({"node_id": "N8", "p_kw": 10.0, "q_kvar": 1.0,
                                 "quality": {"p_kw": "QUALITY_INTERPOLATED"}})
     verdict = PhysicsVerifier(twin()).verify(noop(), snapshot=snap)
-    assert verdict.decision == Decision.DECISION_REJECT
+    assert verdict.decision == Decision.DECISION_UNVERIFIED
+    assert any("N8" in r for r in verdict.unverified_reasons)
 
 
 def test_the_firewall_still_bites_on_this_model() -> None:
@@ -157,9 +167,45 @@ def test_tie_line_commands_are_malformed_because_no_tie_lines_exist() -> None:
     assert verdict.violations[0].type == ViolationType.VIOLATION_TYPE_MALFORMED_ACTION
 
 
-# ------------------------------------------------------------ backward compatibility
+# ------------------------------------------------------------ default model
 
-def test_default_twin_is_unchanged() -> None:
+def test_default_twin_is_northern_islands() -> None:
     c = CircuitTwin()
-    assert c.topology_id == DEFAULT_TOPOLOGY_ID
-    assert "N8" in c.get_all_buses()
+    assert c.topology_id == DEFAULT_TOPOLOGY_ID == TOPOLOGY_ID
+    assert "NAI_F1" in c.get_all_buses()
+    assert "N8" not in c.get_all_buses()
+
+
+def test_vendored_model_and_pin_match_the_contracts_copy() -> None:
+    assert DEFAULT_MODEL_PATH.read_bytes() == DSS.read_bytes()
+    assert DEFAULT_PIN_PATH.read_bytes() == PIN_PATH.read_bytes()
+
+
+def _solved_state(c: CircuitTwin) -> dict:
+    return {
+        "voltages_pu": {b: round(v, 5) for b, v in sorted(c.get_bus_voltages_pu().items())},
+        "line_amps": {n: round(d["max_amps"], 3)
+                      for n, d in sorted(c.get_line_loadings().items())},
+    }
+
+
+def test_ditwah_evening_matches_the_golden_solution() -> None:
+    """The Ditwah evening snapshot solves to the recorded voltages and currents.
+
+    Regenerate after a deliberate model change with ``M4_UPDATE_GOLDEN=1 pytest``.
+    """
+    import os
+
+    from verification.powerflow.solver import PowerFlowSolver
+
+    c = CircuitTwin()
+    assert c.apply_snapshot(sample("ditwah_evening")) == []
+    converged, _ = PowerFlowSolver.solve_snapshot()
+    assert converged
+    state = _solved_state(c)
+    if os.environ.get("M4_UPDATE_GOLDEN"):
+        GOLDEN.parent.mkdir(exist_ok=True)
+        GOLDEN.write_text(json.dumps(state, indent=1, sort_keys=True) + "\n")
+    golden = json.loads(GOLDEN.read_text())
+    assert state["voltages_pu"] == pytest.approx(golden["voltages_pu"], abs=1e-5)
+    assert state["line_amps"] == pytest.approx(golden["line_amps"], abs=1e-3)

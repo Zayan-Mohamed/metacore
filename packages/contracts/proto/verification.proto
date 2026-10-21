@@ -5,17 +5,27 @@ syntax = "proto3";
 //
 // DETERMINISTIC. The verdict is produced by an OpenDSS power-flow solve against a safety
 // specification. Nothing in the decision path is learned.
+//
+// v1.1 (additive only): the UNVERIFIED decision, the generation-adequacy violation, the M1
+// snapshot and limit profile on the request, and the risk certificate and Shapley risk
+// attribution on the verdict. Every v1.0 field keeps its number and meaning, so a v1.0 reader
+// parses a v1.1 verdict (it sees UNVERIFIED as the unknown enum value 3: not an approval).
 package metacore.verification.v1;
 
 option go_package = "github.com/metacore/contracts/go/verification/v1;verificationv1";
 
 import "common.proto";
+import "module1.proto";
 import "module3.proto";
 
 message VerificationRequest {
   metacore.common.v1.Envelope envelope = 1;
   metacore.module3.v1.ProposedControlAction action = 2;
   string topology_id = 3;
+  // v1.1: the hour the action is judged on. Without it the risk certificate cannot be issued
+  // and the verdict is UNVERIFIED.
+  metacore.module1.v1.GridStateSnapshot snapshot = 4;
+  string limit_profile = 5;  // e.g. "METACORE-STRICT"; empty -> the default profile
 }
 
 message VerificationVerdict {
@@ -26,12 +36,61 @@ message VerificationVerdict {
   double solve_latency_ms = 5;
   string spec_version = 6;            // the safety specification this was judged against
   string network_model_version = 7;
+  // v1.1
+  RiskCertificate certificate = 8;              // unset for a Check A rejection
+  repeated RiskAttribution attribution = 9;     // empty when no scenario failed
+  string limit_profile = 10;                    // versioned, e.g. "METACORE-STRICT-v1"
+  repeated string unverified_reasons = 11;      // why, when decision is UNVERIFIED
 }
 
 enum Decision {
   DECISION_UNSPECIFIED = 0;
   DECISION_APPROVE = 1;
   DECISION_REJECT = 2;
+  // v1.1. M4 could not establish safety (solver error, malformed snapshot, or a risk bound that
+  // straddles the target). Never an approval: M3 treats it as not approved.
+  DECISION_UNVERIFIED = 3;
+}
+
+// v1.1. Check B: k of N seeded scenarios of the next hours broke a limit, with exact
+// Clopper-Pearson bounds on the true rate. Holds everything a replay needs and nothing
+// time-dependent, so the same input gives the same bytes.
+message RiskCertificate {
+  Decision decision = 1;
+  uint32 n_scenarios = 2;
+  uint32 n_max = 3;
+  uint32 n_failures = 4;
+  double lower_bound = 5;
+  double upper_bound = 6;
+  double epsilon = 7;
+  double confidence = 8;
+  bool stopped_early = 9;
+  uint32 horizon_h = 10;
+  string limit_profile = 11;
+  string calibration_version = 12;
+  string calibration_sha256 = 13;
+  uint64 seed = 14;
+  string timestamp = 15;              // the recorded hour (local time) the snapshot describes
+  string situation_key = 16;          // calibration group the band came from
+  double band_up = 17;                // band edges, fractions of this hour's demand
+  double band_down = 18;
+  bool pid_enabled = 19;              // conformal PID (storm mode)
+  double pid_extra = 20;              // total P + I + D widening applied
+  bool corner_top_safe = 21;
+  bool corner_bottom_safe = 22;
+  map<string, uint32> failures_by_island = 23;
+  map<string, uint32> failing_elements = 24;
+  repeated string notes = 25;
+}
+
+// v1.1. One player's Shapley share of the certified failure rate; shares sum to k / N.
+message RiskAttribution {
+  string player = 1;                  // a feeder-group bus or an island name from the topology
+  string island = 2;
+  repeated string buses = 3;
+  double share = 4;
+  double fraction_of_risk = 5;
+  double alone = 6;                   // failure rate when only this player moves
 }
 
 // Structured violation evidence — the analytical core of the abductive claim, and the payload
@@ -54,6 +113,8 @@ enum ViolationType {
   VIOLATION_TYPE_THERMAL_OVERLOAD = 3;
   VIOLATION_TYPE_NON_CONVERGENCE = 4;
   VIOLATION_TYPE_MALFORMED_ACTION = 5;
+  // v1.1. Island demand above the in-service generating capacity.
+  VIOLATION_TYPE_GENERATION_INADEQUATE = 6;
 }
 
 // M4 -> M2. Feeds back into the competence signal so a rejection informs future uncertainty.

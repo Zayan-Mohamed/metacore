@@ -1,0 +1,950 @@
+{
+ "E1": {
+  "B0": {
+   "all": {
+    "cases": 1581,
+    "false_approval": {
+     "ci95": [
+      0.0732,
+      0.1623
+     ],
+     "k": 24,
+     "n": 214,
+     "rate": 0.1121
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0,
+      0.0027
+     ],
+     "k": 0,
+     "n": 1367,
+     "rate": 0.0
+    },
+    "unsafe": 214,
+    "unverified": 0
+   },
+   "calm": {
+    "cases": 1325,
+    "false_approval": {
+     "ci95": [
+      0.0697,
+      0.164
+     ],
+     "k": 21,
+     "n": 190,
+     "rate": 0.1105
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0,
+      0.0032
+     ],
+     "k": 0,
+     "n": 1135,
+     "rate": 0.0
+    },
+    "unsafe": 190,
+    "unverified": 0
+   },
+   "ditwah": {
+    "cases": 96,
+    "false_approval": {
+     "ci95": null,
+     "k": 0,
+     "n": 0,
+     "rate": null
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0,
+      0.0377
+     ],
+     "k": 0,
+     "n": 96,
+     "rate": 0.0
+    },
+    "unsafe": 0,
+    "unverified": 0
+   },
+   "name": "Plain gate (snapshot only)",
+   "storm": {
+    "cases": 256,
+    "false_approval": {
+     "ci95": [
+      0.0266,
+      0.3236
+     ],
+     "k": 3,
+     "n": 24,
+     "rate": 0.125
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0,
+      0.0158
+     ],
+     "k": 0,
+     "n": 232,
+     "rate": 0.0
+    },
+    "unsafe": 24,
+    "unverified": 0
+   }
+  },
+  "B1": {
+   "all": {
+    "cases": 1581,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0171
+     ],
+     "k": 0,
+     "n": 214,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.3258,
+      0.3771
+     ],
+     "k": 480,
+     "n": 1367,
+     "rate": 0.3511
+    },
+    "unsafe": 214,
+    "unverified": 0
+   },
+   "calm": {
+    "cases": 1325,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0192
+     ],
+     "k": 0,
+     "n": 190,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.3237,
+      0.3801
+     ],
+     "k": 399,
+     "n": 1135,
+     "rate": 0.3515
+    },
+    "unsafe": 190,
+    "unverified": 0
+   },
+   "ditwah": {
+    "cases": 96,
+    "false_approval": {
+     "ci95": null,
+     "k": 0,
+     "n": 0,
+     "rate": null
+    },
+    "false_rejection": {
+     "ci95": [
+      0.2125,
+      0.4043
+     ],
+     "k": 29,
+     "n": 96,
+     "rate": 0.3021
+    },
+    "unsafe": 0,
+    "unverified": 0
+   },
+   "name": "Fixed buffer 0.97-1.03 pu",
+   "storm": {
+    "cases": 256,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.1425
+     ],
+     "k": 0,
+     "n": 24,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.2879,
+      0.4143
+     ],
+     "k": 81,
+     "n": 232,
+     "rate": 0.3491
+    },
+    "unsafe": 24,
+    "unverified": 0
+   }
+  },
+  "B2": {
+   "all": {
+    "cases": 1581,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0171
+     ],
+     "k": 0,
+     "n": 214,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.1634,
+      0.2052
+     ],
+     "k": 251,
+     "n": 1367,
+     "rate": 0.1836
+    },
+    "unsafe": 214,
+    "unverified": 0
+   },
+   "calm": {
+    "cases": 1325,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0192
+     ],
+     "k": 0,
+     "n": 190,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.1578,
+      0.2033
+     ],
+     "k": 204,
+     "n": 1135,
+     "rate": 0.1797
+    },
+    "unsafe": 190,
+    "unverified": 0
+   },
+   "ditwah": {
+    "cases": 96,
+    "false_approval": {
+     "ci95": null,
+     "k": 0,
+     "n": 0,
+     "rate": null
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0984,
+      0.2565
+     ],
+     "k": 16,
+     "n": 96,
+     "rate": 0.1667
+    },
+    "unsafe": 0,
+    "unverified": 0
+   },
+   "name": "Monte Carlo, no situation bands",
+   "storm": {
+    "cases": 256,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.1425
+     ],
+     "k": 0,
+     "n": 24,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.1528,
+      0.2601
+     ],
+     "k": 47,
+     "n": 232,
+     "rate": 0.2026
+    },
+    "unsafe": 24,
+    "unverified": 0
+   }
+  },
+  "B3": {
+   "all": {
+    "cases": 1581,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0171
+     ],
+     "k": 0,
+     "n": 214,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0447,
+      0.0699
+     ],
+     "k": 77,
+     "n": 1367,
+     "rate": 0.0563
+    },
+    "unsafe": 214,
+    "unverified": 0
+   },
+   "calm": {
+    "cases": 1325,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0192
+     ],
+     "k": 0,
+     "n": 190,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0437,
+      0.0714
+     ],
+     "k": 64,
+     "n": 1135,
+     "rate": 0.0564
+    },
+    "unsafe": 190,
+    "unverified": 0
+   },
+   "ditwah": {
+    "cases": 96,
+    "false_approval": {
+     "ci95": null,
+     "k": 0,
+     "n": 0,
+     "rate": null
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0115,
+      0.1033
+     ],
+     "k": 4,
+     "n": 96,
+     "rate": 0.0417
+    },
+    "unsafe": 0,
+    "unverified": 0
+   },
+   "name": "RCV, static bands",
+   "storm": {
+    "cases": 256,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.1425
+     ],
+     "k": 0,
+     "n": 24,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0302,
+      0.0939
+     ],
+     "k": 13,
+     "n": 232,
+     "rate": 0.056
+    },
+    "unsafe": 24,
+    "unverified": 0
+   }
+  },
+  "B4": {
+   "all": {
+    "cases": 1581,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0171
+     ],
+     "k": 0,
+     "n": 214,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0447,
+      0.0699
+     ],
+     "k": 77,
+     "n": 1367,
+     "rate": 0.0563
+    },
+    "unsafe": 214,
+    "unverified": 0
+   },
+   "calm": {
+    "cases": 1325,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0192
+     ],
+     "k": 0,
+     "n": 190,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0437,
+      0.0714
+     ],
+     "k": 64,
+     "n": 1135,
+     "rate": 0.0564
+    },
+    "unsafe": 190,
+    "unverified": 0
+   },
+   "ditwah": {
+    "cases": 96,
+    "false_approval": {
+     "ci95": null,
+     "k": 0,
+     "n": 0,
+     "rate": null
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0115,
+      0.1033
+     ],
+     "k": 4,
+     "n": 96,
+     "rate": 0.0417
+    },
+    "unsafe": 0,
+    "unverified": 0
+   },
+   "name": "RCV, bands + conformal PID",
+   "storm": {
+    "cases": 256,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.1425
+     ],
+     "k": 0,
+     "n": 24,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0302,
+      0.0939
+     ],
+     "k": 13,
+     "n": 232,
+     "rate": 0.056
+    },
+    "unsafe": 24,
+    "unverified": 0
+   }
+  }
+ },
+ "E2": {
+  "ditwah": {
+   "pid": {
+    "coverage": {
+     "ci95": [
+      0.9211,
+      0.9863
+     ],
+     "k": 156,
+     "n": 162,
+     "rate": 0.963
+    }
+   },
+   "pid_storm": {
+    "coverage": {
+     "ci95": [
+      0.9064,
+      0.9836
+     ],
+     "k": 130,
+     "n": 136,
+     "rate": 0.9559
+    }
+   },
+   "static": {
+    "coverage": {
+     "ci95": [
+      0.9468,
+      0.9962
+     ],
+     "k": 159,
+     "n": 162,
+     "rate": 0.9815
+    }
+   },
+   "static_storm": {
+    "coverage": {
+     "ci95": [
+      0.9369,
+      0.9954
+     ],
+     "k": 133,
+     "n": 136,
+     "rate": 0.9779
+    }
+   },
+   "target_coverage": 0.95
+  },
+  "test": {
+   "pid": {
+    "coverage": {
+     "ci95": [
+      0.9404,
+      0.9591
+     ],
+     "k": 2087,
+     "n": 2196,
+     "rate": 0.9504
+    }
+   },
+   "pid_storm": {
+    "coverage": {
+     "ci95": [
+      0.9322,
+      0.9756
+     ],
+     "k": 362,
+     "n": 378,
+     "rate": 0.9577
+    }
+   },
+   "static": {
+    "coverage": {
+     "ci95": [
+      0.9732,
+      0.9854
+     ],
+     "k": 2152,
+     "n": 2196,
+     "rate": 0.98
+    }
+   },
+   "static_storm": {
+    "coverage": {
+     "ci95": [
+      0.9622,
+      0.9925
+     ],
+     "k": 371,
+     "n": 378,
+     "rate": 0.9815
+    }
+   },
+   "target_coverage": 0.95
+  },
+  "validation": {
+   "pid": {
+    "coverage": {
+     "ci95": [
+      0.9399,
+      0.9587
+     ],
+     "k": 2086,
+     "n": 2196,
+     "rate": 0.9499
+    }
+   },
+   "pid_storm": {
+    "coverage": {
+     "ci95": [
+      0.8655,
+      0.9506
+     ],
+     "k": 172,
+     "n": 188,
+     "rate": 0.9149
+    }
+   },
+   "static": {
+    "coverage": {
+     "ci95": [
+      0.9774,
+      0.9885
+     ],
+     "k": 2160,
+     "n": 2196,
+     "rate": 0.9836
+    }
+   },
+   "static_storm": {
+    "coverage": {
+     "ci95": [
+      0.9044,
+      0.9742
+     ],
+     "k": 178,
+     "n": 188,
+     "rate": 0.9468
+    }
+   },
+   "target_coverage": 0.95
+  }
+ },
+ "E4": {
+  "grounding_pass": {
+   "ci95": [
+    0.9641,
+    1.0
+   ],
+   "k": 101,
+   "n": 101,
+   "rate": 1.0
+  },
+  "planted_cause_recovered": {
+   "ci95": [
+    0.1924,
+    0.3947
+   ],
+   "k": 24,
+   "n": 84,
+   "rate": 0.2857
+  },
+  "rejections_attributed": 101,
+  "top_player_on_failing_island": {
+   "ci95": [
+    0.9641,
+    1.0
+   ],
+   "k": 101,
+   "n": 101,
+   "rate": 1.0
+  }
+ },
+ "E5": {
+  "x1.0": {
+   "all": {
+    "cases": 1581,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0171
+     ],
+     "k": 0,
+     "n": 214,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0447,
+      0.0699
+     ],
+     "k": 77,
+     "n": 1367,
+     "rate": 0.0563
+    },
+    "unsafe": 214,
+    "unverified": 0
+   },
+   "calm": {
+    "cases": 1325,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0192
+     ],
+     "k": 0,
+     "n": 190,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0437,
+      0.0714
+     ],
+     "k": 64,
+     "n": 1135,
+     "rate": 0.0564
+    },
+    "unsafe": 190,
+    "unverified": 0
+   },
+   "ditwah": {
+    "cases": 96,
+    "false_approval": {
+     "ci95": null,
+     "k": 0,
+     "n": 0,
+     "rate": null
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0115,
+      0.1033
+     ],
+     "k": 4,
+     "n": 96,
+     "rate": 0.0417
+    },
+    "unsafe": 0,
+    "unverified": 0
+   },
+   "storm": {
+    "cases": 256,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.1425
+     ],
+     "k": 0,
+     "n": 24,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0302,
+      0.0939
+     ],
+     "k": 13,
+     "n": 232,
+     "rate": 0.056
+    },
+    "unsafe": 24,
+    "unverified": 0
+   }
+  },
+  "x1.5": {
+   "all": {
+    "cases": 1581,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0171
+     ],
+     "k": 0,
+     "n": 214,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.1411,
+      0.1807
+     ],
+     "k": 219,
+     "n": 1367,
+     "rate": 0.1602
+    },
+    "unsafe": 214,
+    "unverified": 0
+   },
+   "calm": {
+    "cases": 1325,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0192
+     ],
+     "k": 0,
+     "n": 190,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.1436,
+      0.1876
+     ],
+     "k": 187,
+     "n": 1135,
+     "rate": 0.1648
+    },
+    "unsafe": 190,
+    "unverified": 0
+   },
+   "ditwah": {
+    "cases": 96,
+    "false_approval": {
+     "ci95": null,
+     "k": 0,
+     "n": 0,
+     "rate": null
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0115,
+      0.1033
+     ],
+     "k": 4,
+     "n": 96,
+     "rate": 0.0417
+    },
+    "unsafe": 0,
+    "unverified": 0
+   },
+   "storm": {
+    "cases": 256,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.1425
+     ],
+     "k": 0,
+     "n": 24,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.0963,
+      0.1891
+     ],
+     "k": 32,
+     "n": 232,
+     "rate": 0.1379
+    },
+    "unsafe": 24,
+    "unverified": 0
+   }
+  },
+  "x2.0": {
+   "all": {
+    "cases": 1581,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0171
+     ],
+     "k": 0,
+     "n": 214,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.3079,
+      0.3585
+     ],
+     "k": 455,
+     "n": 1367,
+     "rate": 0.3328
+    },
+    "unsafe": 214,
+    "unverified": 0
+   },
+   "calm": {
+    "cases": 1325,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.0192
+     ],
+     "k": 0,
+     "n": 190,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.3065,
+      0.3622
+     ],
+     "k": 379,
+     "n": 1135,
+     "rate": 0.3339
+    },
+    "unsafe": 190,
+    "unverified": 0
+   },
+   "ditwah": {
+    "cases": 96,
+    "false_approval": {
+     "ci95": null,
+     "k": 0,
+     "n": 0,
+     "rate": null
+    },
+    "false_rejection": {
+     "ci95": [
+      0.2404,
+      0.4369
+     ],
+     "k": 32,
+     "n": 96,
+     "rate": 0.3333
+    },
+    "unsafe": 0,
+    "unverified": 0
+   },
+   "storm": {
+    "cases": 256,
+    "false_approval": {
+     "ci95": [
+      0.0,
+      0.1425
+     ],
+     "k": 0,
+     "n": 24,
+     "rate": 0.0
+    },
+    "false_rejection": {
+     "ci95": [
+      0.2676,
+      0.3921
+     ],
+     "k": 76,
+     "n": 232,
+     "rate": 0.3276
+    },
+    "unsafe": 24,
+    "unverified": 0
+   }
+  }
+ },
+ "E6": {
+  "b0_rejections_also_rejected_by_sl_psr_2016": {
+   "DECISION_APPROVE": 83,
+   "DECISION_REJECT": 107
+  },
+  "worst_margin_of_rejections": {
+   "B0": {
+    "max": 0.0355,
+    "median": 0.0175,
+    "min": 0.0,
+    "n": 190
+   },
+   "B4": {
+    "max": 0.0355,
+    "median": 0.0051,
+    "min": 0.0,
+    "n": 291
+   }
+  }
+ },
+ "calibration": "m4-calibration/1@ec69c9467686",
+ "cases": 1581,
+ "families": {
+  "bess_charge_40": 107,
+  "bess_export_25": 107,
+  "bess_export_40": 107,
+  "hyb_dg_export": 315,
+  "noop": 315,
+  "shed_nai_f2": 315,
+  "standby_nai_dg2": 315
+ },
+ "quick": false,
+ "schema": "m4-eval/1",
+ "split": [
+  "2025-10-01T00:00",
+  "2025-12-31T17:00"
+ ],
+ "stride_h": 7
+}

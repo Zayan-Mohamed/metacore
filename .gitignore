@@ -74,3 +74,11 @@ reports/**/test_predictions_*.npz
 # The trained ST-GNN v0.1 (equal weighting), 92 KB: lets /module1/forecast and the dashboard
 # page work from a clean clone, and un-skips the gateway forecast tests in CI (PR #12 review).
 !services/learned/module1_state_forecasting/artifacts/stgnn_v0_1_equal.pt
+
+# M4's frozen calibration (bands, miss rows, input hashes), ~650 KB. The verifier reads it on
+# every call and `python -m verification.calibrate check` asserts it rebuilds byte-identically.
+!deterministic-core/module4_verification/src/verification/artifacts/calibration_v1.json
+
+# Playwright run output (apps/dashboard: pnpm test:e2e)
+apps/dashboard/test-results/
+apps/dashboard/playwright-report/

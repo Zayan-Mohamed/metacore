@@ -1,0 +1,4 @@
+# Module 4's calibration seals the SHA-256 of these exact bytes (stored with CRLF); never let a
+# checkout rewrite their line endings, whatever the machine's core.autocrlf.
+data/processed/island_load_hourly.csv -text
+data/raw/nasa_power/*_hourly.csv -text

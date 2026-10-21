@@ -1,4 +1,10 @@
-"""Integration Tests for Module 4 with M3 Sample Action Stream."""
+"""Integration Tests for Module 4 with M3 Sample Action Stream.
+
+M3's committed sample stream still addresses the retired delft_3island buses (N1..N12, tie-lines).
+On northern-islands-v1 those names do not exist, so each such action is REJECTed as malformed --
+never approved on a half-applied state. Moving M3 to the new bus names is M3's change (see
+docs/contracts/m1-m4-topology-v1.md); this test pins M4's side of the contract either way.
+"""
 
 import json
 from pathlib import Path
@@ -61,6 +67,8 @@ def test_m3_sample_actions_execution() -> None:
         assert verdict.action_id == action.action_id
         assert verdict.decision in (Decision.DECISION_APPROVE, Decision.DECISION_REJECT)
         assert verdict.solve_latency_ms >= 0.0
+        if verdict.decision == Decision.DECISION_REJECT:
+            assert verdict.violations, "a rejection must carry its evidence"
 
         trace = verifier.build_rejection_trace(verdict.action_id, verdict.violations)
         assert 0.0 <= trace.severity <= 1.0

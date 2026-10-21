@@ -5,13 +5,17 @@ ZERO ML DEPENDENCIES. Mirrors verification and action types without requiring Op
 
 from enum import StrEnum
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Decision(StrEnum):
     DECISION_UNSPECIFIED = "DECISION_UNSPECIFIED"
     DECISION_APPROVE = "DECISION_APPROVE"
     DECISION_REJECT = "DECISION_REJECT"
+    # The checker could not establish safety: solver error, non-convergence, a malformed
+    # snapshot, or (with the risk certificate) evidence that straddles the risk target.
+    # Never an approval -- M3 treats it as not approved.
+    DECISION_UNVERIFIED = "DECISION_UNVERIFIED"
 
 
 class ViolationType(StrEnum):
@@ -21,6 +25,7 @@ class ViolationType(StrEnum):
     VIOLATION_TYPE_THERMAL_OVERLOAD = "VIOLATION_TYPE_THERMAL_OVERLOAD"
     VIOLATION_TYPE_NON_CONVERGENCE = "VIOLATION_TYPE_NON_CONVERGENCE"
     VIOLATION_TYPE_MALFORMED_ACTION = "VIOLATION_TYPE_MALFORMED_ACTION"
+    VIOLATION_TYPE_GENERATION_INADEQUATE = "VIOLATION_TYPE_GENERATION_INADEQUATE"
 
 
 class Violation(BaseModel):
@@ -60,11 +65,42 @@ class ProposedControlAction(BaseModel):
     rationale: str = ""
 
 
+class RiskCertificate(BaseModel):
+    """The fields of verification's RiskCertificate the explanation uses (the rest ignored)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    decision: Decision
+    n_scenarios: int
+    n_failures: int
+    lower_bound: float
+    upper_bound: float
+    epsilon: float
+    confidence: float
+    horizon_h: int = 6
+    stopped_early: bool = False
+    limit_profile: str = ""
+
+
+class RiskAttribution(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    player: str
+    island: str = ""
+    share: float
+    fraction_of_risk: float = 0.0
+
+
 class VerificationVerdict(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     action_id: str
     decision: Decision
     violations: list[Violation] = Field(default_factory=list)
     solve_latency_ms: float = 0.0
+    unverified_reasons: list[str] = Field(default_factory=list)
+    certificate: RiskCertificate | None = None
+    attribution: list[RiskAttribution] = Field(default_factory=list)
 
 
 class RejectionTrace(BaseModel):

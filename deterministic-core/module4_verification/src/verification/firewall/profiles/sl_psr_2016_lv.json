@@ -1,0 +1,11 @@
+{
+  "profile_id": "SL-PSR-2016-LV",
+  "version": 1,
+  "title": "Sri Lanka distribution performance standard, low voltage",
+  "v_min_pu": 0.94,
+  "v_max_pu": 1.06,
+  "thermal_overload_margin": 0.0,
+  "statistic": "standard judges compliance statistically over measurement periods; M4 applies the band to each solved state",
+  "source": "Sri Lanka Electricity (Distribution) Performance Standards Regulations 2016, low-voltage supply (+/-6 %)",
+  "note": "Check the clause wording before quoting it. The local rule for the 400 V island networks."
+}

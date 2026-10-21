@@ -12,7 +12,7 @@ def test_verification_latency_benchmark() -> None:
         action_id="bench-action",
         origin="SYSTEM1",
         breakers=[],
-        load_shed=[LoadShedCommand(node_id="N8", shed_fraction=0.10, priority_tier=3)],
+        load_shed=[LoadShedCommand(node_id="NAI_F2", shed_fraction=0.10, priority_tier=3)],
         dispatch=[],
         rationale="Latency benchmark check",
     )

@@ -11,10 +11,12 @@ def test_circuit_twin_initialization() -> None:
     generators = twin.get_all_generators()
     loads = twin.get_all_loads()
 
-    assert len(buses) >= 7, f"Expected >= 7 buses, found {len(buses)}: {buses}"
-    assert len(lines) >= 6, f"Expected >= 6 lines, found {len(lines)}: {lines}"
-    assert len(generators) >= 3, f"Expected >= 3 generators, found {len(generators)}"
-    assert len(loads) >= 4, f"Expected >= 4 loads, found {len(loads)}"
+    # northern-islands-v1: 4 islands, 13 buses, 9 lines, 10 generators, 8 feeder-group loads
+    assert twin.topology_id == "northern-islands-v1"
+    assert len(buses) == 13, f"Expected 13 buses, found {len(buses)}: {buses}"
+    assert len(lines) == 9, f"Expected 9 lines, found {len(lines)}: {lines}"
+    assert len(generators) == 10, f"Expected 10 generators, found {len(generators)}"
+    assert len(loads) == 8, f"Expected 8 loads, found {len(loads)}"
 
 
 def test_base_power_flow_convergence() -> None:
@@ -29,16 +31,15 @@ def test_base_power_flow_convergence() -> None:
 
     # In baseline state, all voltages should be within normal operating range
     for bus, v_pu in voltages.items():
-        if bus != "SOURCEBUS":
-            assert 0.90 <= v_pu <= 1.10, f"Bus {bus} voltage {v_pu} out of expected range"
+        assert 0.90 <= v_pu <= 1.10, f"Bus {bus} voltage {v_pu} out of expected range"
 
 
 def test_circuit_reset_to_base() -> None:
     twin = CircuitTwin()
-    twin.set_line_state("Line_1_2", False)
+    twin.set_line_state("NAI_PS_F2", False)
     loadings_tripped = twin.get_line_loadings()
-    assert loadings_tripped["LINE_1_2"]["enabled"] == 0.0
+    assert loadings_tripped["NAI_PS_F2"]["enabled"] == 0.0
 
     twin.reset_to_base()
     loadings_reset = twin.get_line_loadings()
-    assert loadings_reset["LINE_1_2"]["enabled"] == 1.0
+    assert loadings_reset["NAI_PS_F2"]["enabled"] == 1.0
