@@ -1,10 +1,11 @@
 // Module 3 — System 1 / System 2 decisions and the deliberation cost incurred.
 // A run configuration form drives a real train+eval pass of the gating policy
-// (services/learned/module3_metapolicy/run_demo.py, via gateway's /api/module3/run)
+// (services/learned/module3_metapolicy/scripts/demo_run.py, via gateway's /api/module3/run)
 // and renders the result: reward vs. baselines, escalation by severity / trigger_reason,
 // and the paired ProposedControlAction/GatingDecision log.
 import { useState } from "react";
 import type { FormEvent } from "react";
+import { Link } from "react-router-dom";
 
 import {
   MODULE3_DEFAULT_CONFIG,
@@ -48,11 +49,11 @@ const FIELDS: FieldSpec[] = [
   { key: "seed", label: "Seed", min: 0, max: 10_000, step: 1, hint: "RNG seed" },
   { key: "episodeLen", label: "Episode length", min: 20, max: 200, step: 1, hint: "steps/episode" },
   { key: "budgetPerEpisode", label: "Budget / episode", min: 1, max: 200, step: 1, hint: "S2 calls allowed" },
-  { key: "trainEpisodes", label: "Train episodes", min: 10, max: 300, step: 1, hint: "REINFORCE episodes" },
+  { key: "trainEpisodes", label: "Train episodes", min: 10, max: 300, step: 1, hint: "storms for PPO to train on" },
   { key: "evalEpisodes", label: "Eval episodes", min: 1, max: 50, step: 1, hint: "averaged for metrics" },
   { key: "deliberationCost", label: "Deliberation cost", min: 0, max: 5, step: 0.01, hint: "reward penalty for S2" },
-  { key: "benefitScale", label: "Benefit scale", min: 0, max: 20, step: 0.1, hint: "reward weight for correct S2" },
-  { key: "sensingEscalationPenalty", label: "Sensing penalty", min: -10, max: 0, step: 0.1, hint: "penalty for S2 on blackout" },
+  { key: "wServe", label: "Load-served weight", min: 0, max: 10, step: 0.1, hint: "reward for load kept on" },
+  { key: "wViol", label: "Violation weight", min: 0, max: 20, step: 0.1, hint: "penalty for flagged buses" },
 ];
 
 function formatObsValue(field: ObservationField): string {
@@ -77,8 +78,8 @@ function ObservationGrid({
     <div className="gating__card" style={{ marginTop: 14 }}>
       <div className="gating__card-title">2. Generated input — what the gate sees</div>
       <div className="gating__card-sub">
-        step {stepIndex + 1} of {episodeLen} in this fake storm · u = {raw.epistemic_uncertainty.toFixed(4)} ·{" "}
-        {raw.severity} / {raw.trigger_reason} · from Duwaragie’s file + mock M1, not from the form
+        step {stepIndex + 1} of {episodeLen} in this simulated cyclone · u = {raw.epistemic_uncertainty.toFixed(4)} ·{" "}
+        {raw.severity} / {raw.trigger_reason} · M2 numbers replay Duwaragie’s published mock; storm and grid damage are simulated
       </div>
       <div className="gating__obs-grid">
         {observation.map((field) => (
@@ -171,7 +172,7 @@ function CheckIcon({ size = 13 }: { size?: number }) {
 
 // The M2 input state that produced this decision, and the full proposed action plan
 // (breakers/load_shed/dispatch) System1/System2 returned — neither travels over the
-// M3->M4 wire contract itself, both come from run_demo.py's dashboard-only `context`.
+// M3->M4 wire contract itself, both come from serve/demo.py's dashboard-only `context`.
 function DecisionDetail({ row }: { row: Module3DecisionRow }) {
   const ctx = row.context;
   const { breakers, load_shed, dispatch } = row.action;
@@ -200,7 +201,7 @@ function DecisionDetail({ row }: { row: Module3DecisionRow }) {
         )}
 
         <div className="gating__detail-section-title" style={{ marginTop: 16 }}>
-          M4 verdict (mock)
+          Grid twin verdict (surrogate, not the real M4)
         </div>
         {ctx ? (
           <>
@@ -213,16 +214,16 @@ function DecisionDetail({ row }: { row: Module3DecisionRow }) {
             >
               {ctx.verdict}
             </span>
-            {ctx.violations.length > 0 && (
-              <div className="gating__detail-list" style={{ marginTop: 8 }}>
-                {ctx.violations.map((v, i) => (
-                  <div className="gating__detail-list-item" key={i}>
-                    <b>{v.type}</b> on {v.element_id} — measured {v.measured.toFixed(2)}, limit{" "}
-                    {v.limit.toFixed(2)} ({v.attributed_component})
-                  </div>
-                ))}
+            <div className="gating__detail-list" style={{ marginTop: 8 }}>
+              <div className="gating__detail-list-item">
+                load served: <b>{(ctx.served_fraction * 100).toFixed(0)}%</b>
               </div>
-            )}
+              {ctx.violating_buses.length > 0 && (
+                <div className="gating__detail-list-item">
+                  flagged buses: <b>{ctx.violating_buses.join(", ")}</b>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <div className="gating__detail-empty">no verdict recorded</div>
@@ -349,9 +350,11 @@ export default function GatingRoute() {
   const rewardBars = result
     ? [
         { label: "Trained policy", value: result.reward.trained_policy, color: "var(--green)" },
+        { label: "Breaker rule", value: result.reward.breaker_rule, color: "var(--text-muted)" },
         { label: "u-threshold baseline", value: result.reward.threshold, color: "var(--text-muted)" },
         { label: "Always-S2 baseline", value: result.reward.always_s2, color: "var(--text-muted)" },
         { label: "Always-S1 baseline", value: result.reward.always_s1, color: "var(--text-muted)" },
+        { label: "Oracle (reads true damage)", value: result.reward.oracle, color: "var(--text-muted)" },
       ]
     : [];
   const rewardScale = result
@@ -363,6 +366,7 @@ export default function GatingRoute() {
         { label: "always-S1", value: result.reward.always_s1 },
         { label: "always-S2", value: result.reward.always_s2 },
         { label: "u-threshold", value: result.reward.threshold },
+        { label: "breaker-rule", value: result.reward.breaker_rule },
       ]
     : [];
   const bestOfBaselines = baselineCandidates.length
@@ -388,8 +392,9 @@ export default function GatingRoute() {
                 <span className="mono gating__badge">m3-out/0.1</span>
               </div>
               <p className="gating__subtitle">
-                Three steps: <b>Train</b> the chooser, <b>Generate</b> one situation (the 12 numbers
-                the gate sees, including M2’s u), then <b>Process</b> to get the action plan.
+                Three steps: <b>Train</b> the chooser, <b>Generate</b> one situation (the 15 numbers
+                the gate sees, including M2’s u), then <b>Process</b> to get the action plan.{" "}
+                <Link to="/cyclone">Set your own cyclone and test the PPO gate →</Link>
               </p>
             </div>
           </div>
@@ -464,7 +469,7 @@ export default function GatingRoute() {
           <div className="gating__empty">
             {status === "running"
               ? "Training the chooser — Generate and Process unlock after this finishes."
-              : "Train the gate first. Then Generate a situation (you will see the 12 inputs, including u). Then Process to get the plan."}
+              : "Train the gate first. Then Generate a situation (you will see the 15 inputs, including u). Then Process to get the plan."}
           </div>
         )}
 
@@ -528,7 +533,7 @@ export default function GatingRoute() {
             <div className="gating__card" style={{ marginTop: 14 }}>
               <div className="gating__card-title">Reward vs. baselines</div>
               <div className="gating__card-sub">
-                total episode reward — trained policy vs. always-S1 / always-S2 / u&gt;threshold
+                total episode reward — trained policy vs. always-S1 / always-S2 / u&gt;threshold / breaker rule, with the oracle as a ceiling
               </div>
               <div className="gating__bars">
                 {rewardBars.map((bar) => {

@@ -8,8 +8,8 @@ export interface Module3RunConfig {
   trainEpisodes: number;
   evalEpisodes: number;
   deliberationCost: number;
-  benefitScale: number;
-  sensingEscalationPenalty: number;
+  wServe: number;
+  wViol: number;
 }
 
 export const MODULE3_DEFAULT_CONFIG: Module3RunConfig = {
@@ -18,9 +18,9 @@ export const MODULE3_DEFAULT_CONFIG: Module3RunConfig = {
   budgetPerEpisode: 45,
   trainEpisodes: 150,
   evalEpisodes: 12,
-  deliberationCost: 0.1,
-  benefitScale: 4.0,
-  sensingEscalationPenalty: -1.2,
+  deliberationCost: 0.05,
+  wServe: 1.0,
+  wViol: 2.0,
 };
 
 // action_id ties a ProposedControlAction to its GatingDecision — see M3_TO_M4_CONTRACT.md.
@@ -51,8 +51,8 @@ export interface GatingDecision {
 export type Module3Record = ProposedControlAction | GatingDecision;
 
 // Not part of the M3->M4 wire contract (M3_TO_M4_CONTRACT.md) -- this is the M2 input
-// state and M4-mock verdict that produced each decision, added purely for the dashboard.
-// See run_demo.py's `context` list.
+// state and grid-twin verdict that produced each decision, added purely for the dashboard.
+// See serve/demo.py's `context` list.
 export interface Module3DecisionContext {
   action_id: string;
   severity: string;
@@ -62,14 +62,10 @@ export interface Module3DecisionContext {
   competence_drop: boolean;
   reward: number;
   verdict: "APPROVE" | "REJECT";
-  violations: Array<{
-    type: string;
-    element_id: string;
-    measured: number;
-    limit: number;
-    margin_fraction: number;
-    attributed_component: string;
-  }>;
+  /** priority-weighted share of load served after this action, 0..1 */
+  served_fraction: number;
+  /** buses the grid twin flagged (empty when approved) */
+  violating_buses: string[];
 }
 
 export interface Module3RunResult {
@@ -77,6 +73,8 @@ export interface Module3RunResult {
     always_s1: number;
     always_s2: number;
     threshold: number;
+    breaker_rule: number;
+    oracle: number;
     trained_policy: number;
   };
   avg_deliberation_cost: { always_s2: number; threshold: number; trained_policy: number };
@@ -85,6 +83,7 @@ export interface Module3RunResult {
   escalation_by_trigger_reason: Record<string, number>;
   decisions: Module3Record[];
   decision_context: Module3DecisionContext[];
+  notes?: string[];
 }
 
 export class Module3RunError extends Error {
@@ -105,8 +104,8 @@ function toRequestBody(cfg: Module3RunConfig) {
     train_episodes: cfg.trainEpisodes,
     eval_episodes: cfg.evalEpisodes,
     deliberation_cost: cfg.deliberationCost,
-    benefit_scale: cfg.benefitScale,
-    sensing_escalation_penalty: cfg.sensingEscalationPenalty,
+    w_serve: cfg.wServe,
+    w_viol: cfg.wViol,
   };
 }
 
@@ -149,6 +148,14 @@ export interface Module3ProcessResult {
   plan: ProposedControlAction;
   observation: ObservationField[];
   raw: Module3GenerateResult["raw"];
+  /** what the grid twin made of the chosen action (surrogate, not the real M4) */
+  twin?: {
+    approved: boolean;
+    violating_buses: string[];
+    served_fraction: number;
+    reward: number;
+    source: string;
+  };
 }
 
 export async function generateModule3Situation(): Promise<Module3GenerateResult> {
@@ -157,6 +164,112 @@ export async function generateModule3Situation(): Promise<Module3GenerateResult>
 
 export async function processModule3Gate(): Promise<Module3ProcessResult> {
   return postModule3("/api/module3/process");
+}
+
+// ---------------------------------------------------------------- Module 3 cyclone lab
+// One user-defined storm played through a trained gate and the baselines
+// (services/learned/module3_metapolicy/src/module3/serve/storm.py via gateway /api/module3/storm).
+
+export const STORM_KNOBS = [
+  "peak_wind_kmh",
+  "peak_frac",
+  "width_frac",
+  "trip_scale",
+  "comms_rate",
+  "diesel_loss_prob",
+  "grid_loss_prob",
+] as const;
+export type StormKnob = (typeof STORM_KNOBS)[number];
+
+export type StormParams = Record<StormKnob, number> & { ood: boolean };
+
+export interface StormPresets {
+  ranges: Record<StormKnob, [number, number]>;
+  default: StormParams;
+  presets: Record<string, StormParams>;
+  note: string;
+}
+
+export interface StormRequest {
+  preset?: string | null;
+  random?: boolean;
+  params?: Partial<StormParams>;
+  seed: number;
+  gate_seed: number;
+}
+
+// The control action the chosen path proposed (M3 -> M4 ProposedControlAction shape).
+export interface StormPlan {
+  origin: string;
+  load_shed: Array<{ node_id: string; shed_fraction: number; priority_tier: number }>;
+  dispatch: Array<{ node_id: string; p_kw: number }>;
+  breakers: Array<{ edge_id: string; closed: boolean }>;
+  rationale: string;
+}
+
+export interface StormObsField {
+  index: number;
+  name: string;
+  source: string;
+  meaning: string;
+}
+
+export interface StormStep {
+  t: number;
+  wind_kmh: number;
+  stage: string;
+  tripped: number;
+  grid_lost: boolean;
+  comms_up: boolean;
+  u: number;
+  trigger: string;
+  p_s2: number | null;
+  action: 0 | 1;
+  requested: 0 | 1;
+  budget_fallback: boolean;
+  reward: number;
+  served: number;
+  approved: boolean;
+  violations: number;
+  obs: number[];
+  plan: StormPlan;
+}
+
+export interface StormSummary {
+  return: number;
+  s2_rate: number;
+  served_fraction: number;
+  reject_rate: number;
+}
+
+export interface StormResult {
+  params: StormParams;
+  seed: number;
+  gate_seed: number;
+  episode_len: number;
+  obs_fields: StormObsField[];
+  gate: StormSummary & { steps: StormStep[] };
+  baselines: Record<string, StormSummary>;
+  notes: string[];
+}
+
+export async function fetchStormPresets(): Promise<StormPresets> {
+  const res = await fetch("/api/module3/storm/presets");
+  if (!res.ok) {
+    throw new Module3RunError(`Failed to fetch storm presets (HTTP ${res.status})`, res.status);
+  }
+  return (await res.json()) as StormPresets;
+}
+
+export async function runStorm(req: StormRequest): Promise<StormResult> {
+  return postModule3("/api/module3/storm", req);
+}
+
+// How many times the gate switched between System 1 and System 2 during the storm.
+export function countSwitches(steps: StormStep[]): number {
+  let n = 0;
+  for (let i = 1; i < steps.length; i++) if (steps[i].action !== steps[i - 1].action) n++;
+  return n;
 }
 
 // Shared POST + FastAPI error unwrapping. `detail` is a string for our own HTTPExceptions

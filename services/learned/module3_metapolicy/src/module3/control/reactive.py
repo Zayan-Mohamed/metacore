@@ -1,13 +1,14 @@
-"""System 1 — cheap reactive control-path stand-in.
+"""System 1 for the Meta-RL pipeline - the cheap reactive rule.
 
-Emits a dict with ProposedControlAction field names from module3.proto so
-run_demo.py can write contract-shaped JSON directly. No real OpenDSS /
-optimizer — a visibly different output from System 2 so the sample stream
-shows a real S1 vs S2 distinction.
+It sheds load in proportion to node vulnerability, lowest-priority tiers first, never tier 1,
+and sheds less when telemetry is lost (missing data -> conservative fallback, not deliberation).
+It does not look at which lines are tripped - that is the whole point of the contrast with
+System 2 (planner.py). Output uses the ProposedControlAction field names (M3_TO_M4_CONTRACT.md).
 """
+
 from __future__ import annotations
 
-from priority import PRIORITY
+from module3.control.priority import PRIORITY
 
 
 def system1_action(obs_raw: dict) -> dict:
@@ -16,6 +17,12 @@ def system1_action(obs_raw: dict) -> dict:
     Under a sensing drop (comms blackout), shed more conservatively — Duwaragie's
     guidance: missing data → conservative System-1 fallback, not deliberation.
     Leaves dispatch untouched. origin = SYSTEM1.
+
+    INPUT  obs_raw (dict) -- reads: max_node_vulnerability (0..1), trigger_reason
+           (none|value|sensing|both), top_at_risk_nodes (list of node ids).
+    OUTPUT dict with origin="SYSTEM1", breakers=[], load_shed=[{node_id, shed_fraction,
+           priority_tier}], dispatch=[], rationale (str).
+    USES   priority.PRIORITY (node -> tier). Never sheds tier 1.
     """
     vuln = float(obs_raw.get("max_node_vulnerability", 0.0))
     reason = str(obs_raw.get("trigger_reason", "none"))
@@ -45,3 +52,8 @@ def system1_action(obs_raw: dict) -> dict:
         "dispatch": [],
         "rationale": f"S1 {tag} shed vuln={vuln:.2f}",
     }
+
+
+def reactive_plan(context: dict, trigger_reason: str) -> dict:
+    """Input: M1-style context dict + M2 trigger_reason. Output: ProposedControlAction dict."""
+    return system1_action({**context, "trigger_reason": trigger_reason})

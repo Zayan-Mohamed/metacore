@@ -1,4 +1,4 @@
-"""Put the flat starter scripts on sys.path for pytest (mirrors how run_demo.py imports)."""
+"""Make the module root importable for pytest (scripts/, sample_*.jsonl live there)."""
 from __future__ import annotations
 
 import sys
