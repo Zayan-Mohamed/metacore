@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 import yaml  # noqa: E402
-
 from module3.serve.demo import build_config, run_demo  # noqa: E402
 from module3.serve.step import STATE_DIR  # noqa: E402
 

@@ -144,7 +144,9 @@ def run_demo(cfg: dict, state_dir: Path, log=lambda *_: None) -> dict:
         },
         "escalation_by_severity": {s: float(gate["escalation_by_stage"][s]) for s in HAZARD_STAGES},
         "monotonic_nondecreasing": bool(gate["monotonic_nondecreasing"]),
-        "escalation_by_trigger_reason": {k: float(v) for k, v in gate["escalation_by_reason"].items()},
+        "escalation_by_trigger_reason": {
+            k: float(v) for k, v in gate["escalation_by_reason"].items()
+        },
         "decisions": records,
         "decision_context": context,
         "notes": [

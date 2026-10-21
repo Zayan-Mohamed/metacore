@@ -123,7 +123,9 @@ def generate_situation() -> Module3GenerateResult:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "generated.json"
-        payload = _run_module3_script(["scripts/step_run.py", "generate", str(out)], STEP_TIMEOUT_S, out)
+        payload = _run_module3_script(
+            ["scripts/step_run.py", "generate", str(out)], STEP_TIMEOUT_S, out
+        )
     return Module3GenerateResult(**payload)
 
 
@@ -132,7 +134,9 @@ def process_gate() -> Module3ProcessResult:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "processed.json"
-        payload = _run_module3_script(["scripts/step_run.py", "process", str(out)], STEP_TIMEOUT_S, out)
+        payload = _run_module3_script(
+            ["scripts/step_run.py", "process", str(out)], STEP_TIMEOUT_S, out
+        )
     return Module3ProcessResult(**payload)
 
 
