@@ -73,6 +73,9 @@ def _train(
     return model, hist, bc_snapshot
 
 
+train_seed = _train  # public name for callers outside this module (serve/demo.py)
+
+
 def _evaluate_all(
     cfg: dict,
     models: dict[str, RecurrentGate],

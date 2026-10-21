@@ -8,8 +8,7 @@
 The first two terms come from the grid twin and ARE the 'survival' signal. The last two are
 the price of deliberating. The "latency" values (S1 2, S2 18) are cost weights, not measured
 milliseconds: the measured planning times are ~0.01 / ~0.02 ms (docs/module3.md section 27.1).
-They are kept so earlier results stay valid. This replaces the hand-written 7-case table in
-`gating_env.py` (which stays, unchanged, for the dashboard demo and as an ablation baseline).
+They are kept so earlier results stay valid.
 """
 
 from __future__ import annotations

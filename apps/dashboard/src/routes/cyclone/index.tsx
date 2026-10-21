@@ -7,7 +7,14 @@ import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
 
 import { STORM_KNOBS, countSwitches, fetchStormPresets, runStorm, Module3RunError } from "../../lib";
-import type { StormKnob, StormParams, StormPresets, StormResult, StormStep } from "../../lib";
+import type {
+  StormKnob,
+  StormObsField,
+  StormParams,
+  StormPresets,
+  StormResult,
+  StormStep,
+} from "../../lib";
 import "../gating/gating.css";
 import "./cyclone.css";
 
@@ -29,7 +36,7 @@ const KNOBS: Record<StormKnob, KnobInfo> = {
 };
 
 const POLICIES: Array<{ key: string; label: string; note: string }> = [
-  { key: "gate", label: "Trained gate", note: "the Meta-RL gate" },
+  { key: "gate", label: "Trained gate", note: "the PPO + GRU gate" },
   { key: "always_s1", label: "Always System 1", note: "never deliberates" },
   { key: "always_s2", label: "Always System 2", note: "always deliberates" },
   { key: "threshold", label: "u > threshold", note: "escalate when M2's uncertainty is high" },
@@ -186,11 +193,89 @@ function Timeline({
   );
 }
 
-function StepDetail({ step }: { step: StormStep | null }) {
+// The action the chosen control path proposed this step: who is cut, by how much, and what the
+// generators are asked to supply. This is what M3 hands to M4 (M3_TO_M4_CONTRACT.md).
+function PlanPanel({ step }: { step: StormStep }) {
+  const { plan } = step;
+  const nothing = !plan.load_shed.length && !plan.dispatch.length && !plan.breakers.length;
+  return (
+    <div className="cyclone__plan">
+      <div className="cyclone__plan-title">
+        Action proposed by System {step.action + 1} <span className="mono">({plan.origin})</span>
+      </div>
+      {nothing && <div className="cyclone__plan-empty">no load shed, no dispatch, no breaker commands</div>}
+      {plan.load_shed.length > 0 && (
+        <table className="cyclone__plan-table">
+          <thead>
+            <tr><th>load shed at</th><th>cut</th><th>tier</th></tr>
+          </thead>
+          <tbody>
+            {plan.load_shed.map((c) => (
+              <tr key={c.node_id}>
+                <td className="mono">{c.node_id}</td>
+                <td className="mono">{(c.shed_fraction * 100).toFixed(1)}%</td>
+                <td className="mono">{c.priority_tier}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {plan.dispatch.length > 0 && (
+        <table className="cyclone__plan-table">
+          <thead>
+            <tr><th>dispatch at</th><th>set-point</th></tr>
+          </thead>
+          <tbody>
+            {plan.dispatch.map((c) => (
+              <tr key={c.node_id}>
+                <td className="mono">{c.node_id}</td>
+                <td className="mono">{c.p_kw.toFixed(1)} kW</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {plan.breakers.length > 0 && (
+        <div className="mono">
+          breakers: {plan.breakers.map((b) => `${b.edge_id} ${b.closed ? "close" : "open"}`).join(", ")}
+        </div>
+      )}
+      <div className="cyclone__plan-why">{plan.rationale}</div>
+    </div>
+  );
+}
+
+// The 15 numbers the gate was given this step, with where each one comes from.
+function ObsPanel({ step, fields }: { step: StormStep; fields: StormObsField[] }) {
+  return (
+    <div className="cyclone__plan">
+      <div className="cyclone__plan-title">What the gate saw (its 15 inputs)</div>
+      <table className="cyclone__plan-table">
+        <thead>
+          <tr><th>#</th><th>input</th><th>from</th><th>value</th><th>meaning</th></tr>
+        </thead>
+        <tbody>
+          {fields.map((f) => (
+            <tr key={f.index}>
+              <td className="mono">{f.index}</td>
+              <td className="mono">{f.name}</td>
+              <td>{f.source}</td>
+              <td className="mono">{(step.obs[f.index] ?? 0).toFixed(3)}</td>
+              <td>{f.meaning}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StepDetail({ step, fields }: { step: StormStep | null; fields: StormObsField[] }) {
   if (!step) {
     return <div className="cyclone__detail cyclone__detail--empty">Hover the timeline to read one step.</div>;
   }
   return (
+    <>
     <dl className="cyclone__detail">
       <div><dt>step</dt><dd className="mono">{step.t}</dd></div>
       <div><dt>wind</dt><dd className="mono">{step.wind_kmh.toFixed(0)} km/h ({step.stage})</dd></div>
@@ -208,10 +293,15 @@ function StepDetail({ step }: { step: StormStep | null }) {
       <div><dt>reward</dt><dd className="mono">{fmt(step.reward, 3)}</dd></div>
       <div><dt>load served</dt><dd className="mono">{(step.served * 100).toFixed(0)}%</dd></div>
       <div>
-        <dt>M4 twin</dt>
+        <dt>grid twin (surrogate)</dt>
         <dd className="mono">{step.approved ? "approved" : "rejected"}{step.violations ? ` (${step.violations} buses)` : ""}</dd>
       </div>
     </dl>
+    <div className="cyclone__panels">
+      <PlanPanel step={step} />
+      <ObsPanel step={step} fields={fields} />
+    </div>
+    </>
   );
 }
 
@@ -426,7 +516,7 @@ export default function CyclonePage() {
                 main supply lost, blue strip = telemetry down.
               </div>
               <Timeline steps={steps} hovered={hovered} onHover={setHovered} />
-              <StepDetail step={hovered === null ? null : (steps[hovered] ?? null)} />
+              <StepDetail step={hovered === null ? null : (steps[hovered] ?? null)} fields={result.obs_fields} />
             </div>
 
             <div className="gating__card" style={{ marginTop: 14 }}>
@@ -434,7 +524,7 @@ export default function CyclonePage() {
               <div className="gating__card-sub">return = sum of step rewards. Higher is better.</div>
               <div className="cyclone__table">
                 <div className="cyclone__row cyclone__row--head">
-                  <span>Policy</span><span>Return</span><span /><span>System 2</span><span>Load served</span><span>M4 twin rejects</span>
+                  <span>Policy</span><span>Return</span><span /><span>System 2</span><span>Load served</span><span>Twin rejects</span>
                 </div>
                 {rows.map((r) => {
                   const span = retMax - retMin || 1;

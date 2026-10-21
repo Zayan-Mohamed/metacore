@@ -57,3 +57,17 @@ def test_harsher_storm_hurts_the_do_nothing_baseline():
     mild = simulate_storm({"seed": 1, "params": {"peak_wind_kmh": 40.0}})
     harsh = simulate_storm({"seed": 1, "params": {"peak_wind_kmh": 200.0, "trip_scale": 0.4}})
     assert harsh["baselines"]["always_s1"]["return"] < mild["baselines"]["always_s1"]["return"]
+
+
+@needs_ckpt
+def test_every_step_carries_the_action_and_the_inputs_the_gate_saw():
+    res = simulate_storm({"preset": "ditwah_like", "seed": 3, "params": {"grid_loss_prob": 1.0}})
+    assert [f["index"] for f in res["obs_fields"]] == list(range(15))
+    steps = res["gate"]["steps"]
+    for s in steps:
+        assert len(s["obs"]) == 15
+        # the plan comes from the path that actually ran this step
+        assert s["plan"]["origin"] == ("SYSTEM2" if s["action"] == 1 else "SYSTEM1")
+        assert all(0.0 <= c["shed_fraction"] <= 1.0 for c in s["plan"]["load_shed"])
+    # a lost main supply makes System 2 produce dispatch set-points
+    assert any(s["plan"]["dispatch"] for s in steps if s["grid_lost"] and s["action"] == 1)

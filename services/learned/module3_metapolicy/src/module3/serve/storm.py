@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from module3.env.cyclone_env import CycloneGatingEnv
+from module3.env.cyclone_env import OBS_FIELDS, CycloneGatingEnv
 from module3.policy.recurrent_gate import RecurrentGate, build_inputs
 from module3.scenario.cyclone import PROFILES, CycloneParams, sample_params
 from module3.train.evaluate import BASELINES, _baseline_action
@@ -79,6 +79,30 @@ def load_gate(ckpt_dir: Path, gate_seed: int) -> tuple[RecurrentGate, dict]:
     return model, blob["config"]
 
 
+def _plan_view(plan: dict) -> dict:
+    """The control action the chosen path proposed, in the M3 -> M4 ProposedControlAction shape."""
+    return {
+        "origin": str(plan.get("origin", "")),
+        "load_shed": [
+            {
+                "node_id": str(c["node_id"]),
+                "shed_fraction": round(float(c["shed_fraction"]), 4),
+                "priority_tier": int(c.get("priority_tier", 0)),
+            }
+            for c in plan.get("load_shed") or []
+        ],
+        "dispatch": [
+            {"node_id": str(c["node_id"]), "p_kw": float(c["p_kw"])}
+            for c in plan.get("dispatch") or []
+        ],
+        "breakers": [
+            {"edge_id": str(c["edge_id"]), "closed": bool(c.get("closed", True))}
+            for c in plan.get("breakers") or []
+        ],
+        "rationale": str(plan.get("rationale", "")),
+    }
+
+
 def _play(env: CycloneGatingEnv, params, seed: int, policy: str, model, thr_u: float) -> dict:
     obs, _ = env.reset(seed=seed, options={"cyclone": params})
     ep = env._episode
@@ -102,6 +126,7 @@ def _play(env: CycloneGatingEnv, params, seed: int, policy: str, model, thr_u: f
             action = int(torch.argmax(logits[0, 0]).item())
         else:
             action = _baseline_action(policy, obs, truth, thr_u)
+        seen = [round(float(v), 3) for v in obs]  # the 15 inputs the gate saw at this step
         obs, r, _, done, info = env.step(action)
         prev_a, prev_r = info["effective_action"], float(r)
         truth = info["n_tripped_truth"] + int(info["grid_lost_truth"])
@@ -125,6 +150,8 @@ def _play(env: CycloneGatingEnv, params, seed: int, policy: str, model, thr_u: f
                 "served": info["served_fraction"],
                 "approved": info["approved"],
                 "violations": len(info["violating_buses"]),
+                "obs": seen,
+                "plan": _plan_view(info["proposed"]),
             }
         )
     n = len(steps)
@@ -162,6 +189,9 @@ def simulate_storm(spec: dict) -> dict:
         "seed": seed,
         "gate_seed": int(spec.get("gate_seed", 0)),
         "episode_len": len(gate_run["steps"]),
+        "obs_fields": [
+            {k: f[k] for k in ("index", "name", "source", "meaning")} for f in OBS_FIELDS
+        ],
         "gate": gate_run,
         "baselines": {k: {m: v for m, v in r.items() if m != "steps"} for k, r in runs.items()},
         "notes": [

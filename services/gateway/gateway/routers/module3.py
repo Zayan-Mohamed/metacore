@@ -1,14 +1,17 @@
-"""Module 3 — trigger an on-demand train+eval run of the gating meta-policy.
+"""Module 3 - the gating meta-policy: train a demo gate, step through one decision, play a storm.
 
-Shells out to services/learned/module3_metapolicy/run_demo.py, the same script a
-developer runs by hand (see that module's README). This is a dev-tool endpoint for
-the "training only" starter, not the live gRPC hot path (that's gating-decision_svc,
-addressed separately via MODULE3_ADDR) — it exists so the dashboard can drive a real
-run instead of only showing the committed sample fixture.
+Every route shells out to a script in services/learned/module3_metapolicy/scripts/, the same
+scripts a developer runs by hand (see that module's README). These are dev-tool endpoints, not
+the live gRPC hot path (that is gating_decision_svc, addressed separately via MODULE3_ADDR).
 
-Requires the process running the gateway to have module3's deps (torch, gymnasium,
-numpy, pyyaml) importable — true for `uv run uvicorn gateway.main:app` from the repo
-root (shared workspace venv), not for the gateway's own slim Docker image.
+  POST /module3/run       scripts/demo_run.py   train a small PPO gate, score it vs the baselines
+  POST /module3/generate  scripts/step_run.py   draw a situation and show the 15 gate inputs
+  POST /module3/process   scripts/step_run.py   run the saved gate on that situation
+  POST /module3/storm     scripts/storm_run.py  play one user-defined cyclone (Cyclone lab)
+
+Requires the process running the gateway to have module3's deps (torch, gymnasium, numpy,
+pyyaml) importable - true for `uv run uvicorn gateway.main:app` from the repo root (shared
+workspace venv), not for the gateway's own slim Docker image.
 """
 from __future__ import annotations
 
@@ -19,16 +22,14 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import yaml
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/module3", tags=["module3"])
 
 MODULE3_DIR = Path(__file__).resolve().parents[3] / "learned" / "module3_metapolicy"
-BASE_CONFIG_PATH = MODULE3_DIR / "config.yaml"
 STATE_DIR = MODULE3_DIR / "artifacts" / "dashboard"
-RUN_TIMEOUT_S = 90
+RUN_TIMEOUT_S = 150
 STEP_TIMEOUT_S = 30
 
 
@@ -38,9 +39,9 @@ class Module3RunRequest(BaseModel):
     budget_per_episode: float = Field(45, ge=1, le=200)
     train_episodes: int = Field(150, ge=10, le=300)
     eval_episodes: int = Field(12, ge=1, le=50)
-    deliberation_cost: float = Field(0.10, ge=0, le=5)
-    benefit_scale: float = Field(4.0, ge=0, le=20)
-    sensing_escalation_penalty: float = Field(-1.2, ge=-10, le=0)
+    deliberation_cost: float = Field(0.05, ge=0, le=5)
+    w_serve: float = Field(1.0, ge=0, le=10)
+    w_viol: float = Field(2.0, ge=0, le=20)
 
 
 class Module3RunResult(BaseModel):
@@ -51,27 +52,7 @@ class Module3RunResult(BaseModel):
     escalation_by_trigger_reason: dict[str, float]
     decisions: list[dict[str, Any]]
     decision_context: list[dict[str, Any]]
-
-
-def _build_config(req: Module3RunRequest) -> dict:
-    base = yaml.safe_load(BASE_CONFIG_PATH.read_text())
-    return {
-        **base,
-        "seed": req.seed,
-        "env": {
-            **base["env"],
-            "episode_len": req.episode_len,
-            "budget_per_episode": req.budget_per_episode,
-        },
-        "reward": {
-            **base["reward"],
-            "deliberation_cost": req.deliberation_cost,
-            "benefit_scale": req.benefit_scale,
-            "sensing_escalation_penalty": req.sensing_escalation_penalty,
-        },
-        "train": {**base["train"], "episodes": req.train_episodes},
-        "eval": {**base["eval"], "n_episodes": req.eval_episodes},
-    }
+    notes: list[str] = []
 
 
 class ObservationField(BaseModel):
@@ -100,6 +81,7 @@ class Module3ProcessResult(BaseModel):
     plan: dict[str, Any]
     observation: list[ObservationField]
     raw: dict[str, Any]
+    twin: dict[str, Any] | None = None
 
 
 def _run_module3_script(args: list[str], timeout_s: int, output: Path) -> dict[str, Any]:
@@ -125,46 +107,14 @@ def _run_module3_script(args: list[str], timeout_s: int, output: Path) -> dict[s
 
 @router.post("/run", response_model=Module3RunResult)
 def run_module3(req: Module3RunRequest) -> Module3RunResult:
-    cfg = _build_config(req)
-
     with tempfile.TemporaryDirectory() as tmp:
-        tmp_config = Path(tmp) / "config.run.yaml"
-        tmp_output = Path(tmp) / "result.json"
-        tmp_config.write_text(yaml.safe_dump(cfg))
-        policy_path = STATE_DIR / "policy.pt"
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
-
-        try:
-            proc = subprocess.run(
-                [
-                    sys.executable,
-                    "run_demo.py",
-                    str(tmp_config),
-                    str(tmp_output),
-                    str(policy_path),
-                ],
-                cwd=MODULE3_DIR,
-                capture_output=True,
-                text=True,
-                timeout=RUN_TIMEOUT_S,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise HTTPException(status_code=504, detail="Module 3 run timed out") from exc
-
-        if proc.returncode != 0:
-            detail = proc.stderr.strip()[-4000:] or "Module 3 run failed with no stderr output"
-            raise HTTPException(status_code=500, detail=detail)
-
-        if not tmp_output.exists():
-            raise HTTPException(status_code=500, detail="Module 3 run produced no result file")
-
-        payload = json.loads(tmp_output.read_text())
-
-    (STATE_DIR / "last_config.yaml").write_text(yaml.safe_dump(cfg))
-    pending = STATE_DIR / "pending.json"
-    if pending.exists():
-        pending.unlink()
-
+        inp, out = Path(tmp) / "request.json", Path(tmp) / "result.json"
+        inp.write_text(json.dumps(req.model_dump()))
+        payload = _run_module3_script(
+            ["scripts/demo_run.py", str(inp), str(out)], RUN_TIMEOUT_S, out
+        )
+    # a new gate invalidates any situation generated for the previous one
+    (STATE_DIR / "pending.json").unlink(missing_ok=True)
     return Module3RunResult(**payload)
 
 
@@ -172,12 +122,8 @@ def run_module3(req: Module3RunRequest) -> Module3RunResult:
 def generate_situation() -> Module3GenerateResult:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
-        tmp_output = Path(tmp) / "generated.json"
-        payload = _run_module3_script(
-            ["interactive.py", "generate", str(tmp_output)],
-            STEP_TIMEOUT_S,
-            tmp_output,
-        )
+        out = Path(tmp) / "generated.json"
+        payload = _run_module3_script(["scripts/step_run.py", "generate", str(out)], STEP_TIMEOUT_S, out)
     return Module3GenerateResult(**payload)
 
 
@@ -185,12 +131,8 @@ def generate_situation() -> Module3GenerateResult:
 def process_gate() -> Module3ProcessResult:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
-        tmp_output = Path(tmp) / "processed.json"
-        payload = _run_module3_script(
-            ["interactive.py", "process", str(tmp_output)],
-            STEP_TIMEOUT_S,
-            tmp_output,
-        )
+        out = Path(tmp) / "processed.json"
+        payload = _run_module3_script(["scripts/step_run.py", "process", str(out)], STEP_TIMEOUT_S, out)
     return Module3ProcessResult(**payload)
 
 

@@ -1,8 +1,7 @@
 """Loader for Module 2's already-published mock stream (sample_m2_to_m3.jsonl).
 
-Does not import M2's contract.py — sibling flat scripts parse the JSON dicts
-directly. replay_stream bootstrap-resamples the mock with small jitter
-to produce an arbitrary-length training stream (not new synthetic M2 data).
+Does not import M2's contract.py - it parses the JSON dicts directly. `jitter` adds small noise
+to a published row so the cyclone env can draw an arbitrary-length stream (not new M2 data).
 
 Consumes m2-out/0.3 (current on m2/auq-engine). Older 0.1/0.2 mocks still load;
 missing trigger_reason / observed_fraction are derived or defaulted.
@@ -10,7 +9,6 @@ missing trigger_reason / observed_fraction are derived or defaulted.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
 from pathlib import Path
 
 SCHEMA_VERSIONS_ACCEPTED = {"m2-out/0.1", "m2-out/0.2", "m2-out/0.3"}
@@ -24,12 +22,9 @@ OF_FLOOR = 0.35
 
 # Prefer a local vendored copy so this starter runs on main before M2 merges;
 # fall back to the sibling Module 2 path when that branch is present.
-_LOCAL_SAMPLE = Path(__file__).resolve().parent / "sample_m2_to_m3.jsonl"
-_SIBLING_SAMPLE = (
-    Path(__file__).resolve().parent.parent
-    / "module2_auq_engine"
-    / "sample_m2_to_m3.jsonl"
-)
+_MODULE_ROOT = Path(__file__).resolve().parents[3]  # .../module3_metapolicy
+_LOCAL_SAMPLE = _MODULE_ROOT / "sample_m2_to_m3.jsonl"
+_SIBLING_SAMPLE = _MODULE_ROOT.parent / "module2_auq_engine" / "sample_m2_to_m3.jsonl"
 _DEFAULT_PATH = _LOCAL_SAMPLE if _LOCAL_SAMPLE.is_file() else _SIBLING_SAMPLE
 
 
@@ -70,7 +65,7 @@ def load_jsonl(path=None) -> list[dict]:
     return records
 
 
-def _by_reason(records: list[dict]) -> dict[str, list[dict]]:
+def by_reason(records: list[dict]) -> dict[str, list[dict]]:
     buckets = {r: [] for r in TRIGGER_REASONS}
     for rec in records:
         reason = str(rec.get("trigger_reason", "none"))
@@ -95,7 +90,7 @@ def _by_reason(records: list[dict]) -> dict[str, list[dict]]:
     return buckets
 
 
-def _jitter(base: dict, rng) -> dict:
+def jitter(base: dict, rng) -> dict:
     u = float(base["epistemic_uncertainty"]) + float(rng.normal(0, 0.03))
     u = float(max(0.0, min(1.0, u)))
     probs = [float(p) for p in base["class_probabilities"]]
@@ -139,48 +134,3 @@ def _jitter(base: dict, rng) -> dict:
 
 def np_clip(x, lo, hi):
     return lo if x < lo else hi if x > hi else x
-
-
-def replay_stream(
-    records: list[dict],
-    rng,
-    n_steps: int,
-    severity_schedule: list[str] | None = None,
-) -> Iterator[dict]:
-    """Bootstrap-resample the published mock with reason-aware draws.
-
-    Severity schedule biases which *axis* is drawn:
-    - normal / elevated → prefer ``none``, with occasional ``sensing`` (blackout)
-    - severe / extreme → prefer ``value`` / ``both`` (cyclone ± comms loss)
-
-    Still only uses published rows — not new synthetic M2 data.
-    """
-    buckets = _by_reason(records)
-
-    for t in range(n_steps):
-        if severity_schedule is None:
-            base = records[t % len(records)]
-        else:
-            sev = severity_schedule[t]
-            roll = float(rng.random())
-            if sev in ("severe", "extreme"):
-                if roll < 0.15:
-                    pool = buckets["both"]
-                elif roll < 0.25:
-                    pool = buckets["sensing"]
-                else:
-                    pool = buckets["value"]
-            elif sev == "elevated":
-                if roll < 0.15:
-                    pool = buckets["sensing"]
-                elif roll < 0.35:
-                    pool = buckets["value"]
-                else:
-                    pool = buckets["none"]
-            else:  # normal
-                if roll < 0.12:
-                    pool = buckets["sensing"]
-                else:
-                    pool = buckets["none"]
-            base = pool[int(rng.integers(0, len(pool)))]
-        yield _jitter(base, rng)

@@ -141,6 +141,44 @@
   margin: 2px 0 0;
 }
 
+/* action + inputs panels under the step detail */
+.cyclone__panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+.cyclone__plan {
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.cyclone__plan-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.cyclone__plan-empty,
+.cyclone__plan-why {
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+.cyclone__plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 6px;
+}
+.cyclone__plan-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 2px 8px 4px 0;
+}
+.cyclone__plan-table td {
+  padding: 2px 8px 2px 0;
+}
+
 /* comparison table */
 .cyclone__table {
   margin-top: 12px;

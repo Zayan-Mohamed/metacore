@@ -1,4 +1,4 @@
-# Module 3 — Cost-Aware Metacognitive Gating & Meta-Policy
+ # Module 3 — Cost-Aware Metacognitive Gating & Meta-Policy
 
 **Owner:** Saabir S. · **Code:** `services/learned/module3_metapolicy/` · **Contract:** `packages/contracts/proto/module3.proto`
 
@@ -677,7 +677,6 @@ The proper System 2 task is in progress — see §23.
 | `run`, `main` | `train/pipeline.py` | seeds → train → test on random + held-out → optional live-M4 test → `results.json` + `report.md` |
 | `validate_surrogate.py` | `scripts/` | surrogate-vs-live agreement check |
 | `pipeline.yaml` | module root | every knob |
-| `_flat.py` | `src/module3/` | temporary bridge to the flat files (`system1.py`, `m2_stream.py`) |
 
 **The 15-d observation** (slots 0–11 identical to the toy env; 12–14 are new): `0 u · 1 reason_value ·
 2 reason_sensing · 3 state_class · 4–6 class_prob · 7 max_node_vulnerability · 8 severity ·
@@ -1366,6 +1365,14 @@ Example (storm seed 1, `ditwah_like`, gate seed 0): gate 75.30 vs outage rule 72
   after it returns.
 * Like the older `/run` endpoint it needs the gateway to run in the shared workspace venv (torch),
   not the gateway's slim Docker image.
+
+**Added 2026-10-22: the action and the inputs per step.** Hovering a step now also shows (a) the
+**action** the chosen path proposed - nodes shed and by how much, generator set-points, breaker
+commands, the rationale (`ProposedControlAction`, `M3_TO_M4_CONTRACT.md`) - and (b) the **15
+inputs** the gate saw, with where each comes from (`obs_fields`). Code: `serve/storm.py`
+(`_plan_view`, `obs` / `plan` per step), `apps/dashboard/src/routes/cyclone/index.tsx`
+(`PlanPanel`, `ObsPanel`), test `test_every_step_carries_the_action_and_the_inputs_the_gate_saw`.
+The step label "M4 twin" is now "grid twin (surrogate)", because this page never calls the real M4.
 
 **Not covered (still open on the timeline task):** the *deliberation cost incurred* is only
 visible through the reward lane (no separate cost trace); no live-M4 mode; no dashboard control
