@@ -224,7 +224,9 @@ class Module3StormRequest(BaseModel):
 def storm_presets() -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "presets.json"
-        return _run_module3_script(["scripts/storm_run.py", "presets", str(out)], STEP_TIMEOUT_S, out)
+        return _run_module3_script(
+            ["scripts/storm_run.py", "presets", str(out)], STEP_TIMEOUT_S, out
+        )
 
 
 @router.post("/storm")
@@ -239,4 +241,6 @@ def run_storm(req: Module3StormRequest) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as tmp:
         inp, out = Path(tmp) / "request.json", Path(tmp) / "result.json"
         inp.write_text(json.dumps(spec))
-        return _run_module3_script(["scripts/storm_run.py", str(inp), str(out)], STORM_TIMEOUT_S, out)
+        return _run_module3_script(
+            ["scripts/storm_run.py", str(inp), str(out)], STORM_TIMEOUT_S, out
+        )

@@ -59,7 +59,10 @@ def run_one(args: tuple) -> dict:
     tasks = [VAL_OFFSET + 1_000_000 * (seed + 1) + i for i in range(n_tasks)]
     per_task = [run_trials(env, gate, t, n_trials, replay) for t in tasks]
     keys = ("return", "s2_rate", "always_s1", "oracle")
-    by_trial = {k: [float(np.mean([pt[j][k] for pt in per_task])) for j in range(n_trials)] for k in keys}
+    by_trial = {
+        k: [float(np.mean([pt[j][k] for pt in per_task])) for j in range(n_trials)]
+        for k in keys
+    }
     return {
         "arm": arch_name,
         "replay": replay,
@@ -98,7 +101,9 @@ def main() -> int:
         for arch in ARCHS:
             rows = [r for r in results if r["replay"] == rp and r["arm"] == arch]
             m = np.mean([r["by_trial"]["return"] for r in rows], axis=0)
-            gain = np.array([r["by_trial"]["return"][-1] - r["by_trial"]["return"][0] for r in rows])
+            gain = np.array([
+                r["by_trial"]["return"][-1] - r["by_trial"]["return"][0] for r in rows
+            ])
             print(
                 f"  {arch:10s} {'':32s}"
                 + " ".join(f"{x:8.2f}" for x in m)

@@ -80,7 +80,10 @@ def main() -> int:
     suites = list(res[0]["cells"])
     pols = list(res[0]["cells"][suites[0]])
     print(f"\nreal M4 vs surrogate, same storms, no grid loss; seeds {a.seeds}\n")
-    print(f"{'suite':14s} {'policy':13s} {'live':>7s} {'surrogate':>10s} {'gap':>7s} {'max |gap|':>10s} {'live rej':>9s}")
+    print(
+        f"{'suite':14s} {'policy':13s} {'live':>7s} {'surrogate':>10s} "
+        f"{'gap':>7s} {'max |gap|':>10s} {'live rej':>9s}"
+    )
     worst = 0.0
     for suite in suites:
         for pol in pols:

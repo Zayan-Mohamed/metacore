@@ -21,7 +21,10 @@ def main(argv: list[str]) -> int:
         Path(argv[2]).write_text(json.dumps(preset_table()), encoding="utf-8")
         return 0
     if len(argv) != 3:
-        print("usage: storm_run.py <request.json> <result.json> | presets <result.json>", file=sys.stderr)
+        print(
+            "usage: storm_run.py <request.json> <result.json> | presets <result.json>",
+            file=sys.stderr,
+        )
         return 2
     spec = json.loads(Path(argv[1]).read_text(encoding="utf-8"))
     try:
