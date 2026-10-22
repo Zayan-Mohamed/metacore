@@ -177,8 +177,10 @@ def test_summary(weighting: str) -> dict | None:
         return None
     m = res["models"]
     return {k: {"rmse_mean": round(m[k]["test"]["rmse_mean"], 4),
-                "onset_recall": round(m[k]["test"]["onset"]["onset_recall"], 3)}
-            for k in ("stgnn", "persistence", "lstm_1d")}
+                "onset_recall": round(m[k]["test"]["onset"]["onset_recall"], 3),
+                "mase": round(m[k]["test"]["mase"], 3),
+                "ditwah_rmse": round(m[k]["test"]["regimes"]["ditwah"]["rmse"], 4)}
+            for k in ("stgnn", "persistence", "lstm_1d", "lstm_1d_residual")}
 
 
 def main(argv=None) -> int:

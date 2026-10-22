@@ -5,6 +5,8 @@ All functions take ``pred`` and ``true`` shaped (B, N, H): forecast origin, node
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
 
@@ -14,6 +16,46 @@ def error_by_horizon(pred: np.ndarray, true: np.ndarray) -> dict[str, list[float
         "rmse": [float(np.sqrt(np.mean(err[..., h] ** 2))) for h in range(err.shape[-1])],
         "mae": [float(np.mean(np.abs(err[..., h]))) for h in range(err.shape[-1])],
     }
+
+
+def naive_scale(v_train: np.ndarray) -> float:
+    """MASE denominator: in-sample MAE of the one-step naive forecast on the training split
+    (Hyndman and Koehler, 2006). ``v_train`` is the (T, N) label series."""
+    return float(np.mean(np.abs(np.diff(v_train, axis=0))))
+
+
+def mase(pred: np.ndarray, true: np.ndarray, scale: float) -> dict:
+    """Mean absolute scaled error, overall and per horizon. Below 1 beats the one-step naive
+    forecast's training error; multi-step horizons are harder, so persistence itself exceeds 1."""
+    err = np.abs(pred - true) / scale
+    return {"mase": float(err.mean()),
+            "mase_by_h": [float(err[..., h].mean()) for h in range(err.shape[-1])]}
+
+
+def diebold_mariano(pred_a: np.ndarray, pred_b: np.ndarray, true: np.ndarray) -> dict:
+    """Is model A's squared error lower than B's by more than chance? Diebold and Mariano (1995)
+    on the per-origin loss differential, with the Harvey, Leybourne and Newbold (1997)
+    small-sample correction.
+
+    Origins are hourly and forecasts overlap, so the loss is autocorrelated: the long-run variance
+    uses a Bartlett (Newey-West) kernel with lag max(H - 1, 4 (T/100)^(2/9)). The p-value is
+    two-sided from the normal; with T in the hundreds the t reference differs in the third decimal.
+    Negative ``dm`` means A is better.
+    """
+    d = (((pred_a - true) ** 2).mean(axis=(1, 2)) - ((pred_b - true) ** 2).mean(axis=(1, 2)))
+    t = len(d)
+    lag = max(pred_a.shape[-1] - 1, int(4 * (t / 100) ** (2 / 9)))
+    dc = d - d.mean()
+    lrv = float(dc @ dc) / t
+    for k in range(1, lag + 1):
+        lrv += 2 * (1 - k / (lag + 1)) * float(dc[k:] @ dc[:-k]) / t
+    if lrv <= 0:  # identical forecasts: no difference to test
+        return {"dm": 0.0, "p_value": 1.0, "mean_loss_diff": float(d.mean()), "n": t, "lag": lag}
+    stat = d.mean() / math.sqrt(lrv / t)
+    h = pred_a.shape[-1]
+    stat *= math.sqrt((t + 1 - 2 * h + h * (h - 1) / t) / t)
+    return {"dm": float(stat), "p_value": float(math.erfc(abs(stat) / math.sqrt(2))),
+            "mean_loss_diff": float(d.mean()), "n": t, "lag": lag}
 
 
 def event_detection(pred: np.ndarray, true: np.ndarray, tau: float) -> dict[str, list[float]]:
