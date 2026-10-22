@@ -1,6 +1,10 @@
 """Train the v0 vulnerability forecaster and its baselines; write metrics a reader can check.
 
     python -m module1.train.run --out reports/data-analysis-report/m1 --ckpt <artifacts dir>
+    python -m module1.train.run --out reports/data-analysis-report/m1 --variant v0.1 --rescore
+
+``--rescore`` recomputes the test metrics from the saved predictions without retraining (training
+is seeded and deterministic, so retraining reproduces the same predictions anyway).
 
 For every weighting in ``target.WEIGHTINGS`` this trains the ST-GNN and three ablations
 (graph-free, time-free, no-weather), the 1-D LSTM baseline, and scores persistence -- all on the
@@ -38,6 +42,11 @@ MODELS = ("stgnn", "graph_free", "time_free", "no_weather", "lstm_1d", "lstm_1d_
 # Architecture variants of the learned models (see models/stgnn.py). Baselines do not change.
 VARIANTS = {"v0": {"gcn_layers": 2, "residual": False},
             "v0.1": {"gcn_layers": 1, "residual": True}}
+# Test hours scored separately. Regimes are keyed on the first forecast hour (origin + 1).
+STORM_HAZARD = 0.3  # any node's hazard above this
+EVENT_WINDOWS = {"ditwah": ("2025-11-25T00:00", "2025-12-01T00:00")}  # Cyclone Ditwah, 25-30 Nov
+# The ST-GNN is tested for a significant difference against each of these.
+DM_BASELINES = ("persistence", "lstm_1d", "lstm_1d_residual")
 
 
 def _seed(s: int) -> None:
@@ -105,15 +114,34 @@ def train_one(name: str, xtr, ytr, xva, yva, a_hat, cfg) -> tuple[nn.Module, dic
                    "params": sum(p.numel() for p in model.parameters())}
 
 
+def regimes(data, origins) -> dict[str, np.ndarray]:
+    """Boolean masks over test origins: normal hours, storm hours, and each named event."""
+    storm = data.components["hazard"][origins + 1].max(axis=1) > STORM_HAZARD
+    stamps = data.timestamps[origins + 1]
+    out = {"normal": ~storm, "storm": storm}
+    for name, (start, end) in EVENT_WINDOWS.items():
+        out[name] = (stamps >= start) & (stamps < end)
+    return out
+
+
 def evaluate(pred, yte, data, weighting, origins, tau) -> dict:
     v = data.v[weighting]
     a, b = data.split_index["test"]
-    storm = data.components["hazard"][origins + 1].max(axis=1) > 0.3
+    tr_a, tr_b = data.split_index["train"]
+    scale = m.naive_scale(v[tr_a:tr_b])
+    masks = regimes(data, origins)
+    storm = masks["storm"]
     err = m.error_by_horizon(pred, yte)
     return {
         **err,
         "rmse_mean": float(np.mean(err["rmse"])),
         "mae_mean": float(np.mean(err["mae"])),
+        **m.mase(pred, yte, scale),
+        "mase_scale": scale,
+        "regimes": {name: {"origins": int(k.sum()),
+                           "rmse": float(np.sqrt(np.mean((pred[k] - yte[k]) ** 2))),
+                           "mase": m.mase(pred[k], yte[k], scale)["mase"]}
+                    for name, k in masks.items() if k.any()},
         "rmse_storm_hours": float(np.sqrt(np.mean((pred[storm] - yte[storm]) ** 2)))
         if storm.any() else None,
         "storm_origins": int(storm.sum()),
@@ -123,6 +151,33 @@ def evaluate(pred, yte, data, weighting, origins, tau) -> dict:
         "hit_at_3_h1": m.spatial_hit_rate(pred, yte, tau, 3, 0),
         "hit_at_1_h6": m.spatial_hit_rate(pred, yte, tau, 1, 5),
     }
+
+
+def significance(preds: dict, yte, data, origins) -> dict:
+    """Diebold-Mariano: ST-GNN against each baseline, over all test hours and per regime."""
+    masks = {"all": np.ones(len(origins), bool), **regimes(data, origins)}
+    return {base: {name: m.diebold_mariano(preds["stgnn"][k], preds[base][k], yte[k])
+                   for name, k in masks.items() if k.sum() > 1}
+            for base in DM_BASELINES if base in preds}
+
+
+def score(res: dict, preds: dict, yte, data, wname, origins) -> None:
+    for name, p in preds.items():
+        res["models"][name]["test"] = evaluate(p, yte, data, wname, origins, res["tau"])
+    res["significance_vs_stgnn"] = significance(preds, yte, data, origins)
+
+
+def rescore(out: Path, tag: str, data_root) -> int:
+    path = out / f"forecast_{tag}_metrics.json"
+    report = json.loads(path.read_text())
+    data = ds.build(data_root)
+    for wname, res in report["results"].items():
+        z = np.load(out / f"test_predictions_{tag}_{wname}.npz")
+        preds = {name: z[name] for name in res["models"]}
+        score(res, preds, z["true"], data, wname, z["origins"])
+    path.write_text(json.dumps(report, indent=1))
+    print(f"rescored {path}")
+    return 0
 
 
 def latency_ms(model: nn.Module, x: np.ndarray, reps: int = 200) -> dict:
@@ -143,13 +198,19 @@ def latency_ms(model: nn.Module, x: np.ndarray, reps: int = 200) -> dict:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", required=True, help="metrics + predictions directory (tracked)")
-    ap.add_argument("--ckpt", required=True, help="checkpoint directory (git-ignored)")
+    ap.add_argument("--ckpt", help="checkpoint directory (git-ignored); required unless --rescore")
     ap.add_argument("--data-root", default=None)
     ap.add_argument("--weightings", nargs="*", default=list(tgt.WEIGHTINGS))
     ap.add_argument("--variant", default="v0", choices=sorted(VARIANTS))
+    ap.add_argument("--rescore", action="store_true",
+                    help="recompute test metrics from saved predictions; no training")
     args = ap.parse_args(argv)
     cfg = dict(CONFIG, variant=args.variant)
     tag = args.variant.replace(".", "_")
+    if args.rescore:
+        return rescore(Path(args.out), tag, args.data_root)
+    if not args.ckpt:
+        ap.error("--ckpt is required when training")
     out, ckpt = Path(args.out), Path(args.ckpt)
     out.mkdir(parents=True, exist_ok=True)
     ckpt.mkdir(parents=True, exist_ok=True)
@@ -185,8 +246,7 @@ def main(argv=None) -> int:
                 torch.save(model.state_dict(), ckpt / f"stgnn_{tag}_{wname}.pt")
             print(f"[{wname}] {name}: {info['epochs']} epochs, val mse {info['best_val_mse']:.6f}",
                   flush=True)
-        for name, p in preds.items():
-            res["models"][name]["test"] = evaluate(p, yte, data, wname, ote, tau)
+        score(res, preds, yte, data, wname, ote)
         report["results"][wname] = res
         np.savez_compressed(out / f"test_predictions_{tag}_{wname}.npz", origins=ote, true=yte,
                             timestamps=data.timestamps[ote], **preds)

@@ -274,3 +274,38 @@ def test_onset_lead_time_finds_the_earliest_warning() -> None:
     pred[3, 0, 2] = 1.0                  # issued at 3, horizon 3 -> covers t0
     out = m.onset_lead_time(pred, v, origins, 0.5)
     assert out == {"onsets": 1, "onset_recall": 1.0, "mean_lead_h": 3.0}
+
+
+def test_mase_is_one_for_a_forecast_as_good_as_the_training_naive() -> None:
+    v_train = np.array([[0.0], [0.1], [0.0], [0.1]])   # one-step naive MAE = 0.1
+    scale = m.naive_scale(v_train)
+    true = np.zeros((4, 1, 2))
+    out = m.mase(true + 0.1, true, scale)
+    assert scale == pytest.approx(0.1)
+    assert out["mase"] == pytest.approx(1.0) and out["mase_by_h"] == pytest.approx([1.0, 1.0])
+
+
+def test_diebold_mariano_sign_and_strength() -> None:
+    rng = np.random.default_rng(0)
+    true = rng.random((300, 4, 6))
+    good = true + rng.normal(0, 0.01, true.shape)
+    bad = true + rng.normal(0, 0.10, true.shape)
+    better = m.diebold_mariano(good, bad, true)
+    assert better["dm"] < 0 and better["p_value"] < 1e-6
+    assert m.diebold_mariano(bad, good, true)["dm"] == pytest.approx(-better["dm"])
+    assert m.diebold_mariano(good, good, true)["mean_loss_diff"] == 0.0
+
+
+@needs_artifacts
+def test_ditwah_window_lies_in_the_test_quarter_and_is_stormy() -> None:
+    from module1.train.run import EVENT_WINDOWS, regimes
+
+    data = ds.build()
+    a, b = data.split_index["test"]
+    origins = np.arange(a, b - 1)
+    masks = regimes(data, origins)
+    start, end = EVENT_WINDOWS["ditwah"]
+    assert ds.SPLITS["test"][0] <= start and end <= "2026"
+    assert masks["ditwah"].sum() == 144                       # 25-30 Nov, hourly
+    assert masks["storm"][masks["ditwah"]].mean() > 0.9       # the cyclone is in the data
+    assert not (masks["normal"] & masks["storm"]).any()
