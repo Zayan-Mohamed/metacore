@@ -518,7 +518,11 @@ export interface Module1ForecastResult {
   quality_mask: QualityFlag[];
   observed_fraction: number;
   nodes: Module1ForecastNode[];
-  test_summary: Record<"stgnn" | "persistence" | "lstm_1d", { rmse_mean: number; onset_recall: number }> | null;
+  /** Held-out test quarter. lstm_1d_residual is the fair baseline (same residual head as ST-GNN). */
+  test_summary: Record<
+    "stgnn" | "persistence" | "lstm_1d" | "lstm_1d_residual",
+    { rmse_mean: number; onset_recall: number; mase: number; ditwah_rmse: number }
+  > | null;
   generated_ms: number;
 }
 
