@@ -2,6 +2,10 @@
 
 **Status:** accepted · **Deciders:** whole team (owner: Zayan, M1)
 
+**Amended by:** [ADR 0006](0006-live-weather-mode.md), which adds a `live-weather` mode for
+Module 1 (live weather, modelled electrical state) run in Python. Everything below still holds
+for electrical data.
+
 ## Context
 
 `packages/contracts/proto/module1.proto` describes a real-time control system. `StreamSnapshot`
