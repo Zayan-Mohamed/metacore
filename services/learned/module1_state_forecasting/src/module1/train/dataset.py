@@ -85,6 +85,95 @@ def _hybrid_decay_lagged(tidy_csv: Path, stamps: np.ndarray, train_end: str) -> 
     return np.array([decay[s[:7]] for s in stamps])
 
 
+def fit_site_stats(x: dict[str, np.ndarray], load_kw: np.ndarray, tr: slice) -> dict:
+    """Every scaling constant of one island's features, fitted on the training rows only.
+
+    Training and the live worker both apply these through ``site_features``, so a live hour is
+    scaled exactly as the hours the model learned from. Plain floats, so they serialise.
+    """
+    def p99(k: str) -> float:
+        return float(np.percentile(x[k][tr], 99.0)) or 1.0
+
+    def moments(k: str) -> list[float]:
+        return [float(x[k][tr].mean()), float(x[k][tr].std()) or 1.0]
+
+    return {
+        "cs99": float(np.percentile(x["ghi_clearsky_wh_m2"][tr], 99.0)),
+        "p99": {k: p99(k) for k in ("wind_10m_ms", "wind_50m_ms", "precip_mm_hr")},
+        "moments": {k: moments(k) for k in ("temp_2m_c", "pressure_kpa")},
+        "peak_kw": float(load_kw[tr].max()),
+        "hazard_ref": tgt.hazard_reference(x["wind_50m_ms"][tr], x["precip_mm_hr"][tr]),
+    }
+
+
+def site_features(x: dict[str, np.ndarray], load_kw: np.ndarray, st: dict) -> dict[str, np.ndarray]:
+    """The per-island model inputs for any run of consecutive hours, scaled by ``st``."""
+    def zs(k: str) -> np.ndarray:
+        mean, sd = st["moments"][k]
+        return (x[k] - mean) / sd
+
+    peak = st["peak_kw"]
+    ghi_n = np.minimum(x["ghi_wh_m2"] / st["cs99"], 1.5)
+    return {
+        "ghi_wh_m2_norm": ghi_n,
+        "clearsky_index": np.where(x["ghi_clearsky_wh_m2"] > 1.0,
+                                   np.minimum(x["ghi_wh_m2"]
+                                              / np.maximum(x["ghi_clearsky_wh_m2"], 1.0), 1.0),
+                                   0.0),
+        "wind_10m_ms_norm": np.minimum(x["wind_10m_ms"] / st["p99"]["wind_10m_ms"], 1.5),
+        "wind_50m_ms_norm": np.minimum(x["wind_50m_ms"] / st["p99"]["wind_50m_ms"], 1.5),
+        "pv_available_kw_norm": ghi_n,
+        "temp_2m_c_norm": zs("temp_2m_c"),
+        "humidity_2m_pct_norm": x["humidity_2m_pct"] / 100.0,
+        "precip_mm_hr_norm": np.minimum(x["precip_mm_hr"] / st["p99"]["precip_mm_hr"], 1.5),
+        "pressure_kpa_norm": zs("pressure_kpa"),
+        "load_kw_norm": load_kw / peak,
+        "load_ramp_kw_per_h_norm": np.diff(load_kw, prepend=load_kw[0]) / peak,
+    }
+
+
+def temporal_features(stamps: np.ndarray) -> dict[str, np.ndarray]:
+    hours = np.array([int(s[11:13]) for s in stamps])
+    doy = np.array([np.datetime64(s[:10]).astype("datetime64[D]").item().timetuple().tm_yday
+                    for s in stamps])
+    return {
+        "hour_sin": np.sin(2 * np.pi * hours / 24), "hour_cos": np.cos(2 * np.pi * hours / 24),
+        "doy_sin": np.sin(2 * np.pi * (doy - 1) / 365),
+        "doy_cos": np.cos(2 * np.pi * (doy - 1) / 365),
+    }
+
+
+def node_tensor(graph: MicrogridGraph, stamps: np.ndarray, site: dict, hazard_isl: dict,
+                stress_isl: dict, decay: np.ndarray):
+    """(x[T, N, F], components, v[weighting]) from per-island features and target terms."""
+    t_count, n = len(stamps), graph.n
+    temporal = temporal_features(stamps)
+    comp = {k: np.zeros((t_count, n)) for k in ("hazard", "fragility", "stress")}
+    v = {k: np.zeros((t_count, n)) for k in tgt.WEIGHTINGS}
+    x_all = np.zeros((t_count, n, len(FEATURES)), dtype=np.float32)
+    col = {f: i for i, f in enumerate(FEATURES)}
+    for j in range(n):
+        isl, asset = graph.node_island[j], graph.node_asset[j]
+        frag = tgt.fragility(asset, decay)
+        comp["hazard"][:, j] = tgt.EXPOSURE[asset] * hazard_isl[isl]
+        comp["fragility"][:, j] = frag
+        comp["stress"][:, j] = stress_isl[isl]
+        for k in tgt.WEIGHTINGS:
+            v[k][:, j] = tgt.combine(hazard_isl[isl], frag, stress_isl[isl], asset, k)
+        for f, arr in site[isl].items():
+            if f == "pv_available_kw_norm" and asset != "pv":
+                continue
+            x_all[:, j, col[f]] = arr
+        for f, arr in temporal.items():
+            x_all[:, j, col[f]] = arr
+        x_all[:, j, col["nominal_kv_norm"]] = 1.0
+        x_all[:, j, col["critical_load"]] = 1.0 if asset == "bus" else 0.0
+        if f"is_{asset}" in col:
+            x_all[:, j, col[f"is_{asset}"]] = 1.0
+        x_all[:, j, col["fragility"]] = frag
+    return x_all, comp, v
+
+
 # Weather sources the forecaster can be trained on (ADR 0006). Both are written in the NASA POWER
 # file layout, so only the directory changes. The target's hazard term is computed from the same
 # weather, so a model trained on one source predicts that source's target.
@@ -109,7 +198,6 @@ def build(data_root: str | Path | None = None, weather_source: str = "nasa_power
     for isl in ISLAND_ORDER:
         if [r["timestamp_lst"] for r in weather[isl]] != list(stamps):
             raise ValueError(f"{isl} weather is not aligned to the common hourly grid")
-    t_count = len(stamps)
 
     loads: dict[str, np.ndarray] = {}
     for isl in ISLAND_ORDER:
@@ -126,82 +214,24 @@ def build(data_root: str | Path | None = None, weather_source: str = "nasa_power
     w = {isl: {k: np.array([float(r[k]) for r in weather[isl]]) for k in WEATHER}
          for isl in ISLAND_ORDER}
 
-    fitted: dict = {"hazard_ref": {}, "norm": {}, "peak_kw": {}}
+    fitted: dict = {"hazard_ref": {}, "norm": {}, "peak_kw": {}, "site_stats": {}}
     site: dict[str, dict[str, np.ndarray]] = {}
     hazard_isl: dict[str, np.ndarray] = {}
     stress_isl: dict[str, np.ndarray] = {}
     for isl in ISLAND_ORDER:
-        x = w[isl]
-        tr = slice(tr0, tr1)
-        cs99 = float(np.percentile(x["ghi_clearsky_wh_m2"][tr], 99.0))
-
-        def p99(k: str, _x=x, _tr=tr) -> float:
-            return float(np.percentile(_x[k][_tr], 99.0)) or 1.0
-
-        def zs(k: str, _x=x, _tr=tr) -> np.ndarray:
-            sd = float(_x[k][_tr].std()) or 1.0
-            return (_x[k] - float(_x[k][_tr].mean())) / sd
-
-        peak = float(loads[isl][tr].max())
-        fitted["peak_kw"][isl] = peak
-        ghi_n = np.minimum(x["ghi_wh_m2"] / cs99, 1.5)
-        site[isl] = {
-            "ghi_wh_m2_norm": ghi_n,
-            "clearsky_index": np.where(x["ghi_clearsky_wh_m2"] > 1.0,
-                                       np.minimum(x["ghi_wh_m2"]
-                                                  / np.maximum(x["ghi_clearsky_wh_m2"], 1.0), 1.0),
-                                       0.0),
-            "wind_10m_ms_norm": np.minimum(x["wind_10m_ms"] / p99("wind_10m_ms"), 1.5),
-            "wind_50m_ms_norm": np.minimum(x["wind_50m_ms"] / p99("wind_50m_ms"), 1.5),
-            "pv_available_kw_norm": ghi_n,
-            "temp_2m_c_norm": zs("temp_2m_c"),
-            "humidity_2m_pct_norm": x["humidity_2m_pct"] / 100.0,
-            "precip_mm_hr_norm": np.minimum(x["precip_mm_hr"] / p99("precip_mm_hr"), 1.5),
-            "pressure_kpa_norm": zs("pressure_kpa"),
-            "load_kw_norm": loads[isl] / peak,
-            "load_ramp_kw_per_h_norm": np.diff(loads[isl], prepend=loads[isl][0]) / peak,
-        }
-        ref = tgt.hazard_reference(x["wind_50m_ms"][tr], x["precip_mm_hr"][tr])
-        fitted["hazard_ref"][isl] = ref
-        hazard_isl[isl] = tgt.hazard(x["wind_50m_ms"], x["precip_mm_hr"], ref)
+        st = fit_site_stats(w[isl], loads[isl], slice(tr0, tr1))
+        fitted["site_stats"][isl] = st
+        fitted["peak_kw"][isl] = st["peak_kw"]
+        fitted["hazard_ref"][isl] = st["hazard_ref"]
+        site[isl] = site_features(w[isl], loads[isl], st)
+        hazard_isl[isl] = tgt.hazard(w[isl]["wind_50m_ms"], w[isl]["precip_mm_hr"],
+                                     st["hazard_ref"])
         kva = np.array([params["measured_inputs"]["installed_kva"][f"{s[:4]}/{isl}"]
                         for s in stamps])
         stress_isl[isl] = tgt.stress(loads[isl], kva)
 
-    hours = np.array([int(s[11:13]) for s in stamps])
-    doy = np.array([np.datetime64(s[:10]).astype("datetime64[D]").item().timetuple().tm_yday
-                    for s in stamps])
-    temporal = {
-        "hour_sin": np.sin(2 * np.pi * hours / 24), "hour_cos": np.cos(2 * np.pi * hours / 24),
-        "doy_sin": np.sin(2 * np.pi * (doy - 1) / 365),
-        "doy_cos": np.cos(2 * np.pi * (doy - 1) / 365),
-    }
     decay = _hybrid_decay_lagged(tidy_csv, stamps, SPLITS["train"][1])
-
-    n = graph.n
-    comp = {k: np.zeros((t_count, n)) for k in ("hazard", "fragility", "stress")}
-    v = {k: np.zeros((t_count, n)) for k in tgt.WEIGHTINGS}
-    x_all = np.zeros((t_count, n, len(FEATURES)), dtype=np.float32)
-    col = {f: i for i, f in enumerate(FEATURES)}
-    for j in range(n):
-        isl, asset = graph.node_island[j], graph.node_asset[j]
-        frag = tgt.fragility(asset, decay)
-        comp["hazard"][:, j] = tgt.EXPOSURE[asset] * hazard_isl[isl]
-        comp["fragility"][:, j] = frag
-        comp["stress"][:, j] = stress_isl[isl]
-        for k in tgt.WEIGHTINGS:
-            v[k][:, j] = tgt.combine(hazard_isl[isl], frag, stress_isl[isl], asset, k)
-        for f, arr in site[isl].items():
-            if f == "pv_available_kw_norm" and asset != "pv":
-                continue
-            x_all[:, j, col[f]] = arr
-        for f, arr in temporal.items():
-            x_all[:, j, col[f]] = arr
-        x_all[:, j, col["nominal_kv_norm"]] = 1.0
-        x_all[:, j, col["critical_load"]] = 1.0 if asset == "bus" else 0.0
-        if f"is_{asset}" in col:
-            x_all[:, j, col[f"is_{asset}"]] = 1.0
-        x_all[:, j, col["fragility"]] = frag
+    x_all, comp, v = node_tensor(graph, stamps, site, hazard_isl, stress_isl, decay)
     # "vulnerability" (the lagged label) is filled per weighting at window time; see windows().
 
     if not np.isfinite(x_all).all():

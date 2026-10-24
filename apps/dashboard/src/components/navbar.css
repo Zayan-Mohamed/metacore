@@ -1,0 +1,59 @@
+/**
+ * Shared module navigation bar. Colour tokens come from src/styles/tokens.css (:root).
+ */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 40px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  font-size: 13.5px;
+}
+.navbar__home {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.navbar__home:hover {
+  color: var(--amber);
+}
+.navbar__links {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+.navbar__link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.navbar__link:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.navbar__link--active {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+.navbar__tag {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  opacity: 0.75;
+}
+@media (max-width: 560px) {
+  .navbar {
+    padding: 10px 16px;
+    gap: 12px;
+  }
+}

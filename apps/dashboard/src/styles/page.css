@@ -1,0 +1,354 @@
+/**
+ * Shared page chrome for the Module 1 monitoring pages (Live, Data health, Grid, Model graph).
+ * Same conventions as routes/vulnerability and routes/agent-state -- tokens from tokens.css,
+ * numbers in IBM Plex Mono -- lifted into one file so four new pages do not copy it four times.
+ *
+ * Chart series roles (validated on the dark surface #12161d, all pairs, dataviz validator):
+ *   --series-stgnn  blue    ST-GNN (ours)
+ *   --series-lstm   orange  1-D LSTM + residual head (the fair baseline)
+ *   --series-pers   aqua    persistence
+ *   the realised target is plain text ink, so it never competes with a model for identity.
+ */
+:root {
+  --series-stgnn: #3987e5;
+  --series-lstm: #d95926;
+  --series-pers: #199e70;
+}
+
+.pg {
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+}
+.pg * {
+  box-sizing: border-box;
+}
+.pg .mono {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+.pg__inner {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 36px 40px 64px;
+}
+@media (max-width: 720px) {
+  .pg__inner {
+    padding: 24px 16px 48px;
+  }
+}
+
+/* header */
+.pg__header {
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.pg h1 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pg__subtitle {
+  margin: 7px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  max-width: 80ch;
+}
+.pg__badge {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+.pg__badge--good {
+  color: var(--green);
+  border-color: var(--green);
+}
+.pg__badge--warn {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+.pg__badge--bad {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+/* cards */
+.pg__card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px 22px;
+  margin-top: 20px;
+  min-width: 0;
+}
+.pg__card--error {
+  border-color: var(--red);
+}
+.pg__card-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+.pg__card-sub,
+.pg__note {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  max-width: 80ch;
+}
+.pg__note {
+  margin-top: 12px;
+}
+.pg__pre {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.pg__cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 0 20px;
+}
+
+/* controls */
+.pg__row-label {
+  display: block;
+  margin-top: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pg__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+.pg__btn {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--bg);
+  background: var(--blue);
+  border: 1px solid var(--blue);
+  border-radius: 7px;
+  padding: 7px 13px;
+  cursor: pointer;
+}
+.pg__btn--ghost {
+  color: var(--text);
+  background: transparent;
+  border-color: var(--border);
+}
+.pg__btn--ghost:hover {
+  border-color: var(--text-dim);
+}
+.pg__btn--sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.pg__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.pg__input {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 9px;
+  color-scheme: dark;
+}
+.pg__range {
+  width: 100%;
+  margin-top: 12px;
+  accent-color: var(--blue);
+}
+
+/* KPI tiles */
+.pg__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.pg__kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  min-width: 0;
+}
+.pg__kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pg__kpi-value {
+  margin-top: 6px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 20px;
+  font-weight: 500;
+}
+.pg__kpi-note {
+  margin-top: 4px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+/* tables */
+.pg__table-wrap {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+.pg__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.pg__table th,
+.pg__table td {
+  text-align: left;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.pg__table th {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pg__table td.num,
+.pg__table th.num {
+  text-align: right;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+.pg__table tr.is-best td {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* status (icon + label, never colour alone) */
+.pg__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 5px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.pg__status--pass {
+  color: var(--green);
+}
+.pg__status--fail,
+.pg__status--error {
+  color: var(--red);
+}
+.pg__status--warn {
+  color: var(--amber);
+}
+
+/* quality marks */
+.pg__q {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.pg__q--observed {
+  color: var(--green);
+  border-color: var(--green);
+}
+.pg__q--interpolated {
+  color: var(--blue);
+  border-color: var(--blue);
+}
+.pg__q--stale {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+.pg__q--missing {
+  color: var(--text-dim);
+  border-style: dashed;
+}
+
+/* legend */
+.pg__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.pg__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pg__swatch {
+  width: 14px;
+  height: 3px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.pg__swatch--dash {
+  background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important;
+}
+
+/* chart tooltip */
+.pg__chart {
+  position: relative;
+  margin-top: 12px;
+}
+.pg__chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.pg__tip {
+  position: absolute;
+  pointer-events: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 7px 9px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: nowrap;
+  z-index: 2;
+}
+.pg__tip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}

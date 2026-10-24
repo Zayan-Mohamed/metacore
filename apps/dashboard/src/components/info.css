@@ -1,0 +1,39 @@
+.info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 6px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  color: var(--text-dim);
+  font: 600 10px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  font-style: normal;
+  vertical-align: middle;
+  cursor: help;
+}
+.info:hover,
+.info:focus-visible {
+  color: var(--text);
+  outline: none;
+}
+.info__bubble {
+  position: fixed;
+  width: max-content;
+  max-width: 280px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: oklch(28% 0.02 260);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 24px oklch(0% 0 0 / 0.4);
+  color: var(--text);
+  font: 400 12.5px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  z-index: 50;
+}

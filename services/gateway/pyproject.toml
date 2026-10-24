@@ -8,6 +8,7 @@ dependencies = [
   "pydantic>=2.9",
   "fastapi>=0.115",
   "uvicorn[standard]>=0.31",
+  "psycopg[binary]>=3.2,<4",
   "metacore-module4-verification",
   "metacore-module4-translation",
 ]

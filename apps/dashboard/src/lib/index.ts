@@ -766,3 +766,257 @@ export async function runModule4Verify(
     (detail, status) => new Module4RunError(detail, status),
   );
 }
+
+// ---------------------------------------------------------------- Module 1 monitoring pages
+// Data health, Grid and Model graph. All read-only GETs against
+// gateway routers/module1.py, except the grid snapshot, which is a POST like /forecast.
+
+async function getJson<T>(url: string, makeError: (detail: string, status: number) => Error): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    const detail = typeof payload?.detail === "string" ? payload.detail : `request failed with status ${res.status}`;
+    throw makeError(detail, res.status);
+  }
+  return (await res.json()) as T;
+}
+
+const m1Error = (detail: string, status: number) => new Module1RunError(detail, status);
+
+export type Quality = "QUALITY_OBSERVED" | "QUALITY_INTERPOLATED" | "QUALITY_STALE" | "QUALITY_MISSING";
+
+export interface FileInfo {
+  path: string;
+  present: boolean;
+  bytes?: number;
+  files?: number;
+  modified?: string | null;
+}
+
+export interface DataGate {
+  id: string;
+  title: string;
+  checks: string;
+  status: "pass" | "fail" | "error";
+  failures: string[];
+  failure_count: number;
+  error: string | null;
+  duration_ms: number;
+  inputs: FileInfo[];
+}
+
+export interface WeatherFacts {
+  source: string;
+  model: string | null;
+  range: [string, string];
+  hours_per_site: number;
+  missing_values: Record<string, number>;
+  sites: number;
+  distinct_series: Record<string, number>;
+  cells_to_sites: Record<string, string[]>;
+}
+
+export interface SourceComparisonVar {
+  corr_same_hour: number;
+  corr_best: number;
+  best_lag_h: number;
+  mean_open_meteo: number;
+  mean_nasa_power: number;
+}
+
+export interface Module1DataHealth {
+  generated_at: string;
+  summary: { gates: number; passed: number; failed: number };
+  gates: DataGate[];
+  ledger: { rows: number; systems: string[]; years: string[]; months_per_system: number;
+    raw_workbook_on_this_machine: boolean; governance: string };
+  weather: Record<"nasa_power" | "open_meteo", WeatherFacts>;
+  load: { quality: Quality; islands: Record<string, { peak_kw: number; mean_kw: number; load_factor: number }> };
+  scenarios: {
+    counts: Record<string, number>;
+    rule: Record<string, unknown>;
+    out_of_distribution: { scenario_id: string; island: string; plant: string; start_month: string; end_month: string }[];
+  };
+  features: { total: number; by_quality: Record<string, number>; by_group: Record<string, Record<string, number>> };
+  source_comparison: {
+    note: string;
+    islands: Record<string, Record<string, SourceComparisonVar> & {
+      annual_rain_mm: { open_meteo: [number, number]; nasa_power: [number, number] } }>;
+  };
+  generated_ms: number;
+}
+
+export function fetchModule1DataHealth(): Promise<Module1DataHealth> {
+  return getJson<Module1DataHealth>("/api/module1/data-health", m1Error);
+}
+
+export interface Module1GraphNode {
+  id: string;
+  island: string;
+  asset: string;
+  degree: number;
+  neighbours: string[];
+  self_weight: number;
+  neighbour_weight: number;
+  exposure: number;
+}
+
+export interface Module1Ablation {
+  rmse: Record<"stgnn" | "graph_free" | "time_free" | "no_weather" | "lstm_1d_residual", number>;
+  graph_gain_pct: number;
+  temporal_gain_pct: number;
+  weather_gain_pct: number;
+  params: number | null;
+}
+
+export interface Module1Graph {
+  nodes: Module1GraphNode[];
+  edges: [string, string][];
+  a_hat: number[][];
+  rule: string;
+  layer: string;
+  ablations: Record<string, Record<Module1Weighting, Module1Ablation>>;
+}
+
+export function fetchModule1Graph(): Promise<Module1Graph> {
+  return getJson<Module1Graph>("/api/module1/graph", m1Error);
+}
+
+export interface TopologyBus {
+  node_id: string; island: string; asset_type: string; nominal_kv: number; critical_load: boolean;
+  role?: string; x_offset: number; y_offset: number;
+}
+export interface TopologyLine {
+  edge_id: string; from_node: string; to_node: string; length_km: number; ampacity_a: number;
+  circuits?: number; provenance: string; note?: string;
+}
+export interface TopologyAsset {
+  element: string; bus: string; island: string; asset_type: string; rating_kva: number;
+  in_service: boolean; grid_forming: boolean; provenance: string; note?: string;
+}
+export interface Module1Topology {
+  topology_id: string;
+  schema_version: unknown;
+  base_kv: number;
+  buses: TopologyBus[];
+  lines: TopologyLine[];
+  assets: TopologyAsset[];
+  loads: { element: string; bus: string; island: string; base_kw: number; base_kvar: number }[];
+  assumptions: unknown;
+  governance?: unknown;
+}
+
+export interface SnapshotNodeState {
+  node_id: string;
+  voltage_pu: number | null;
+  p_kw: number | null;
+  q_kvar: number | null;
+  soc_fraction: number | null;
+  quality: Record<string, Quality>;
+}
+export interface Module1Snapshot {
+  topology_id: string;
+  timestamp_lst: string;
+  update_period_s: number;
+  node_states: SnapshotNodeState[];
+  assets_out_of_service: string[];
+  hybrid_plant_down: boolean;
+  data_source: string;
+}
+
+export function fetchModule1Topology(): Promise<Module1Topology> {
+  return getJson<Module1Topology>("/api/module1/topology", m1Error);
+}
+
+export function snapshotModule1(timestamp: string): Promise<Module1Snapshot> {
+  return postJson<Module1Snapshot>("/api/module1/snapshot", { timestamp }, m1Error);
+}
+
+// ---------------------------------------------------------------- live system (control room)
+// What the hourly pipeline stored (gateway routers/live.py). Read-only.
+
+export interface LiveNode {
+  id: string;
+  island: string;
+  asset: string;
+  history: number[];
+  current: number;
+  forecast: Record<"stgnn" | "lstm_1d_residual" | "persistence", number[]>;
+  components_now: Record<"hazard" | "fragility" | "stress", number>;
+}
+
+export interface LiveIsland {
+  hours: string[];
+  load_kw: number[];
+  installed_kva: number;
+  wind_50m_ms: number[];
+  precip_mm_hr: number[];
+  ghi_wh_m2: number[];
+  temp_2m_c: number[];
+}
+
+export interface LiveGridHour {
+  hour: string;
+  lead_h: number;
+  hazard_level: number;
+  decision: string;
+  violations: { type: string; element_id: string; limit: number; measured: number }[];
+  unverified_reasons: string[];
+  certificate: { upper_bound: number; n_failures: number; n_scenarios: number; notes?: string[] } | null;
+  verify_ms: number;
+  buses: { bus: string; voltage_pu: number; status: string }[];
+  lines: { line: string; amps: number; rating_amps: number; loading_pct: number | null; in_service: boolean }[];
+  adequacy: { island: string; station: string; demand_kva: number; capacity_kva: number }[];
+  assets_out_of_service: string[];
+  v_min_pu: number;
+  v_max_pu: number;
+}
+
+export interface LiveLatest {
+  run: { id: number; issued_for: string; started_at: string; finished_at: string | null; status: string;
+    stage_ms: Record<string, number>; errors: string[]; runs_stored: number };
+  weather_fetch: { fetched_at: string; model: string; endpoint: string; cells: Record<string, number[]> };
+  module1: {
+    kind: "live"; issued_for: string; horizon_hours: string[]; tau: number; weighting: string;
+    models: Record<string, string>; weather_source: string; ledger_year_used: string;
+    fragility_carried_forward: boolean; input_sha256: string; latency_ms: number;
+    ledger_latest_month?: string; ledger_source?: string;
+    nodes: LiveNode[]; islands: Record<string, LiveIsland>; above_tau_t1: string[];
+    quality: Record<string, Quality>;
+  };
+  module2: {
+    head: string; class_names: string[]; value_threshold: number; hysteresis_h: number;
+    nodes: { node: string; epistemic_uncertainty: number; competence_drop: boolean; trigger_reason: string;
+      state_class: number; class_probabilities: number[]; observed_fraction: number }[];
+  } | null;
+  module3: { connected: boolean; reason: string; owner: string };
+  module4: LiveGridHour[];
+  ledger?: {
+    latest_month: string | null; source: string | null;
+    recent_files: { file: string; received: string; status: string; months_added: string[];
+      failures: string[]; notes: string[] }[];
+  };
+}
+
+export interface LiveHistory {
+  runs: { run_id: number; issued_for: string; status: string; current: Record<string, number> | null;
+    v_min_pu: number | null; max_line_pct: number | null; decision: string | null }[];
+}
+
+export interface LiveScores {
+  window_runs: number;
+  first_scored_hour: string | null;
+  last_scored_hour: string | null;
+  hours_scored: number;
+  models: Record<string, { n: number; rmse: number | null; by_lead: Record<number, { n: number; rmse: number; mae: number }> }>;
+}
+
+export function fetchLive(): Promise<LiveLatest> {
+  return getJson<LiveLatest>("/api/live/latest", m1Error);
+}
+export function fetchLiveHistory(hours: number): Promise<LiveHistory> {
+  return getJson<LiveHistory>(`/api/live/history?hours=${hours}`, m1Error);
+}
+export function fetchLiveScores(hours: number): Promise<LiveScores> {
+  return getJson<LiveScores>(`/api/live/scores?hours=${hours}`, m1Error);
+}

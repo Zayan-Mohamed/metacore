@@ -251,6 +251,8 @@ def main(argv=None) -> int:
             if name == "stgnn":
                 res["models"][name]["latency"] = latency_ms(model, te)
                 torch.save(model.state_dict(), ckpt / f"stgnn_{tag}_{wname}.pt")
+            if name == "lstm_1d_residual":  # the live worker forecasts with the fair baseline too
+                torch.save(model.state_dict(), ckpt / f"lstm_1d_residual_{tag}_{wname}.pt")
             print(f"[{wname}] {name}: {info['epochs']} epochs, val mse {info['best_val_mse']:.6f}",
                   flush=True)
         score(res, preds, yte, data, wname, ote)
