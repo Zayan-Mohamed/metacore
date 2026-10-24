@@ -49,7 +49,15 @@ def build_snapshot(timestamp: str, repo_root: Path, data_root=None,
     load_csv, _, _, _ = _load_layout(root)
     tidy_csv = (root / "processed" / "ceb_generation_tidy.csv" if (root / "processed").is_dir()
                 else root / "ceb_generation_tidy.csv")
-    island_kw = _island_load(load_csv, timestamp)
+    return snapshot_from(timestamp, _island_load(load_csv, timestamp),
+                         _hybrid_down(tidy_csv, timestamp), spec,
+                         "real" if root.name == "data" else "synthetic", emitted_at)
+
+
+def snapshot_from(timestamp: str, island_kw: dict[str, float], hybrid_down: bool, spec: dict,
+                  data_source: str, emitted_at: str | None = None,
+                  scenario: str | None = None) -> dict:
+    """One hour's GridStateSnapshot from island demand. The live worker passes today's load."""
     q_ratio = math.tan(math.acos(POWER_FACTOR))
     shares = spec["assumptions"]["feeder_shares"]
 
@@ -78,7 +86,6 @@ def build_snapshot(timestamp: str, repo_root: Path, data_root=None,
             })
 
     out_of_service = [a["element"] for a in spec["assets"] if not a["in_service"]]
-    hybrid_down = _hybrid_down(tidy_csv, timestamp)
     if hybrid_down:
         out_of_service += [a["element"] for a in spec["assets"]
                            if a["bus"].endswith("_HYB") and a["in_service"]
@@ -88,7 +95,7 @@ def build_snapshot(timestamp: str, repo_root: Path, data_root=None,
             "schema_version": SCHEMA_VERSION,
             "emitted_at": emitted_at or datetime.now(UTC).isoformat(timespec="seconds"),
             "producer": "module1",
-            "scenario": None,
+            "scenario": scenario,
             "trace_id": f"m1-snapshot-{timestamp}",
         },
         "topology_id": TOPOLOGY_ID,
@@ -97,5 +104,5 @@ def build_snapshot(timestamp: str, repo_root: Path, data_root=None,
         "node_states": node_states,
         "assets_out_of_service": sorted(out_of_service),
         "hybrid_plant_down": hybrid_down,
-        "data_source": "real" if root.name == "data" else "synthetic",
+        "data_source": data_source,
     }
