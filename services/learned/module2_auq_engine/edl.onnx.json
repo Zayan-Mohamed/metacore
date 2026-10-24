@@ -115,10 +115,10 @@
   "export": {
     "opset": 18,
     "exporter": "torch.onnx.export(dynamo=True)",
-    "torch_version": "2.13.0+cpu"
+    "torch_version": "2.13.0"
   },
   "verification": {
     "atol": 1e-05,
-    "max_abs_diff_vs_torch": 1.9073486328125e-06
+    "max_abs_diff_vs_torch": 3.814697265625e-06
   }
 }

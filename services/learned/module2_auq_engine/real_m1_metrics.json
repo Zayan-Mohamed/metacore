@@ -39,43 +39,43 @@
   "epochs": 120,
   "seed": 0,
   "observed_fraction": 0.42857142857142855,
-  "elapsed_s": 107.0,
+  "elapsed_s": 22.7,
   "label_disclosure": "The 3-class label is discretised from M1's constructed vulnerability proxy V (module1.train.target: hazard x exposure + fragility + stress), which M1 documents as a constructed proxy, never an observation, and carries as QUALITY_INTERPOLATED. No dataset records an observed microgrid safety class. Class cuts are quantiles of the TRAINING split only. Accuracy and ECE are therefore measured against a constructed target: they state internal consistency with M1's proxy, not the prediction of real asset failures.",
   "classification_on_real_hourly_states": [
     {
       "method": "Softmax max-prob",
-      "accuracy": 0.8261,
-      "ece": 0.1467,
-      "aurc": 0.1148,
-      "macro_recall": 0.7234
+      "accuracy": 0.8262,
+      "ece": 0.1464,
+      "aurc": 0.1144,
+      "macro_recall": 0.7261
     },
     {
       "method": "MC-Dropout (T=20)",
-      "accuracy": 0.852,
-      "ece": 0.0793,
-      "aurc": 0.0729,
-      "macro_recall": 0.7579
+      "accuracy": 0.8535,
+      "ece": 0.0786,
+      "aurc": 0.072,
+      "macro_recall": 0.761
     },
     {
       "method": "EDL (ours)",
-      "accuracy": 0.8661,
-      "ece": 0.0737,
-      "aurc": 0.0739,
-      "macro_recall": 0.7731
+      "accuracy": 0.8673,
+      "ece": 0.0645,
+      "aurc": 0.0735,
+      "macro_recall": 0.7808
     }
   ],
   "two_axis_trigger": {
-    "value_threshold": 0.9501,
-    "value_threshold_exact": 0.9500935077667236,
+    "value_threshold": 0.9214,
+    "value_threshold_exact": 0.9214440584182739,
     "observed_fraction_floor": 0.35,
     "rows": [
       {
         "population": "real states, nominal mask",
         "observed_fraction": 0.4286,
-        "fires": 0.0779,
+        "fires": 0.0586,
         "reasons": {
-          "none": 0.9221,
-          "value": 0.0779
+          "none": 0.9414,
+          "value": 0.0586
         }
       },
       {
@@ -83,8 +83,8 @@
         "observed_fraction": 0.2857,
         "fires": 1.0,
         "reasons": {
-          "both": 0.0779,
-          "sensing": 0.9221
+          "both": 0.0586,
+          "sensing": 0.9414
         }
       }
     ]
@@ -101,15 +101,15 @@
       {
         "method": "Softmax max-prob",
         "auroc": 0.5667,
-        "aupr": 0.1459,
+        "aupr": 0.0772,
         "fpr95": 0.7,
         "mean_score_nominal_heldout": 0.0149,
-        "mean_score_decay": 0.0902
+        "mean_score_decay": 0.087
       },
       {
         "method": "MC-Dropout (T=20)",
         "auroc": 0.8222,
-        "aupr": 0.1891,
+        "aupr": 0.1327,
         "fpr95": 0.3667,
         "mean_score_nominal_heldout": 0.1095,
         "mean_score_decay": 0.3799
@@ -117,7 +117,7 @@
       {
         "method": "EDL (ours)",
         "auroc": 0.9778,
-        "aupr": 0.5167,
+        "aupr": 0.4405,
         "fpr95": 0.0667,
         "mean_score_nominal_heldout": 0.1617,
         "mean_score_decay": 0.7484
