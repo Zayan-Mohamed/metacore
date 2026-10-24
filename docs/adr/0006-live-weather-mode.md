@@ -42,8 +42,9 @@ not available. Each of these has to change explicitly, not drift.
 2. **Open-Meteo is the live weather source, and the model is retrained on it.** Training uses the
    Historical Forecast API for 2024-2025, the same product as live, on the same event-based split.
    Mapping to the 28-feature schema: 80 m wind stands in for 50 m, km/h becomes m/s, hPa becomes
-   kPa, and shortwave radiation and its clear-sky counterpart (W/m², mean of the preceding hour)
-   become Wh/m². Each fetch records the grid cell Open-Meteo actually answered from, as the NASA
+   kPa, and shortwave radiation (W/m², mean of the preceding hour) becomes Wh/m². Clear-sky GHI
+   is computed from solar geometry: Open-Meteo lists the variable but returns no values for it
+   (checked live and historical, four models). Each fetch records the grid cell Open-Meteo actually answered from, as the NASA
    path does, so the islands' spatial resolution stays visible. The NASA-trained v0.1
    results remain the paper results; the gap between the two sources is reported as a finding,
    not tuned away.
