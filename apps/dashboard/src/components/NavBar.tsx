@@ -7,8 +7,12 @@ import { Link, NavLink, Outlet } from "react-router-dom";
 import "./navbar.css";
 
 const LINKS = [
+  { to: "/live", tag: "M1", label: "Live" },
   { to: "/vulnerability", tag: "M1", label: "Forecast" },
   { to: "/agent-state", tag: "M1", label: "State" },
+  { to: "/model-graph", tag: "M1", label: "Graph" },
+  { to: "/grid", tag: "M1", label: "Grid" },
+  { to: "/data-health", tag: "M1", label: "Data" },
   { to: "/uncertainty", tag: "M2", label: "Uncertainty" },
   { to: "/cyclone", tag: "M3", label: "Cyclone lab" },
   { to: "/gating", tag: "M3", label: "Gating" },

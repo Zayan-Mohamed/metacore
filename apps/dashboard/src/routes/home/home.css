@@ -136,3 +136,43 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* status strip: one line per system fact, status in text + colour, never colour alone */
+.home__status {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+  margin: 22px 0 0;
+}
+.home__status > div {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.home__status dt {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.home__status dd {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+.home__status a {
+  color: inherit;
+}
+.home__status-good {
+  color: var(--green);
+}
+.home__status-bad {
+  color: var(--red);
+}
+.home__status-warn {
+  color: var(--amber);
+}
+.home__status-dim {
+  color: var(--text-dim);
+}

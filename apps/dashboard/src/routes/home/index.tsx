@@ -2,8 +2,10 @@
  * Landing page: one card per module, in pipeline order, each linking to that module's pages.
  * The demo starts here instead of on a module page, so nobody has to type a route.
  */
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { fetchModule1DataHealth, type Module1DataHealth } from "../../lib";
 import "./home.css";
 
 type Page = { to: string; label: string; blurb: string };
@@ -16,8 +18,12 @@ const MODULES: ModuleCard[] = [
     owner: "Zayan",
     summary: "Fuses weather, load and asset data into one state per node and forecasts each node's vulnerability six hours ahead.",
     pages: [
+      { to: "/live", label: "Live", blurb: "Hour-by-hour forecasts and rolling scores (replay)" },
       { to: "/vulnerability", label: "Vulnerability forecast", blurb: "ST-GNN v0.1 on the held-out quarter" },
       { to: "/agent-state", label: "State representation", blurb: "28 features and their quality mask" },
+      { to: "/model-graph", label: "Model graph", blurb: "What the graph mixes and whether it helps" },
+      { to: "/grid", label: "Grid", blurb: "Four-island network and hourly feeder state" },
+      { to: "/data-health", label: "Data health", blurb: "Every pipeline gate, run now" },
     ],
   },
   {
@@ -46,6 +52,25 @@ const MODULES: ModuleCard[] = [
   },
 ];
 
+function StatusStrip() {
+  const [health, setHealth] = useState<Module1DataHealth | null>(null);
+  const [down, setDown] = useState(false);
+  useEffect(() => {
+    fetchModule1DataHealth().then(setHealth).catch(() => setDown(true));
+  }, []);
+  const gates = health
+    ? { text: `${health.summary.passed} / ${health.summary.gates} pass`, cls: health.summary.failed ? "bad" : "good" }
+    : { text: down ? "gateway unreachable" : "checking…", cls: down ? "bad" : "dim" };
+  return (
+    <dl className="home__status">
+      <div><dt>Data gates</dt><dd className={`home__status-${gates.cls}`}><Link to="/data-health">{gates.text}</Link></dd></div>
+      <div><dt>Live pipeline</dt><dd className="home__status-warn"><Link to="/live">on hold · replay mode</Link></dd></div>
+      <div><dt>Live model</dt><dd className="mono">stgnn_v0_1_om_equal</dd></div>
+      <div><dt>Weather source</dt><dd>Open-Meteo ICON (live) · NASA POWER (paper)</dd></div>
+    </dl>
+  );
+}
+
 export default function HomeRoute() {
   return (
     <div className="home">
@@ -57,6 +82,8 @@ export default function HomeRoute() {
             hands its output to the next: state → uncertainty → gate → verification.
           </p>
         </header>
+
+        <StatusStrip />
 
         <ol className="home__grid">
           {MODULES.map((m, i) => (
