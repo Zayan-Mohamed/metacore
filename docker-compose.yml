@@ -51,7 +51,26 @@ services:
     build: ./deterministic-core/module4_semantic_translation
     profiles: [default, core]
 
+  # Live-weather mode (ADR 0006): the store the hourly worker writes and the dashboard reads.
+  # Bound to localhost only; on the home server set METACORE_DB_PASSWORD in the environment.
+  db:
+    image: postgres:18-alpine
+    profiles: [default, live]
+    environment:
+      POSTGRES_USER: metacore
+      POSTGRES_PASSWORD: ${METACORE_DB_PASSWORD:-metacore-local}
+      POSTGRES_DB: metacore
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: [metacore-db:/var/lib/postgresql]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metacore -d metacore"]
+      interval: 5s
+      retries: 10
+
   bus:
     image: nats:2.10-alpine
     profiles: [default, ingest]
     ports: ["4222:4222"]
+
+volumes:
+  metacore-db:
