@@ -278,12 +278,12 @@ def forecast(weather: dict[str, list[dict]], now: str, fetch_meta: dict | None =
     }
 
 
-def contract_state(fz: Frozen, inputs: dict) -> dict:
-    """The M1 -> M2 contract fields for the live hour: 28 features per node, graph node order.
-
-    Same formulas as ``module1.assemble``; only the source of the hour's values changes.
+def contract_state(fz: Frozen, inputs: dict, lag: int = 0) -> dict:
+    """The M1 -> M2 contract fields for the live hour (or ``lag`` hours before it): 28 features
+    per node, graph node order. Same formulas as ``module1.assemble``; only the values' source
+    changes.
     """
-    t = inputs["t"]
+    t = inputs["t"] - lag
     stamp = inputs["stamps"][t]
     temporal = asm._temporal(stamp)
     rows: list[list[float]] = []
@@ -359,6 +359,9 @@ def step(weather: dict[str, list[dict]], now: str, fetch_meta: dict | None = Non
     out = forecast(weather, now, fetch_meta, inputs)
     fz = inputs["fz"]
     out["contract_state"] = contract_state(fz, inputs)
+    # M2's trigger confirms a competence drop over two consecutive hours (its config's
+    # hysteresis); the previous hour lets it score the live hour as a stream, not a one-off.
+    out["contract_state_prev"] = contract_state(fz, inputs, lag=1)
     out["snapshots"] = snapshots(fz, inputs)
     return out
 
