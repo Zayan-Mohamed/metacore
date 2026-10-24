@@ -5,9 +5,11 @@
  */
 import { Navigate, Route, Routes } from "react-router-dom";
 
+import { NavLayout } from "./components/NavBar";
 import AgentStateRoute from "./routes/agent-state";
 import CycloneRoute from "./routes/cyclone";
 import GatingRoute from "./routes/gating";
+import HomeRoute from "./routes/home";
 import UncertaintyRoute from "./routes/uncertainty";
 import VerificationRoute from "./routes/verification";
 import VulnerabilityRoute from "./routes/vulnerability";
@@ -15,13 +17,16 @@ import VulnerabilityRoute from "./routes/vulnerability";
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/gating" replace />} />
-      <Route path="/agent-state" element={<AgentStateRoute />} />
-      <Route path="/gating" element={<GatingRoute />} />
-      <Route path="/cyclone" element={<CycloneRoute />} />
-      <Route path="/uncertainty" element={<UncertaintyRoute />} />
-      <Route path="/verification" element={<VerificationRoute />} />
-      <Route path="/vulnerability" element={<VulnerabilityRoute />} />
+      <Route path="/" element={<HomeRoute />} />
+      <Route element={<NavLayout />}>
+        <Route path="/agent-state" element={<AgentStateRoute />} />
+        <Route path="/gating" element={<GatingRoute />} />
+        <Route path="/cyclone" element={<CycloneRoute />} />
+        <Route path="/uncertainty" element={<UncertaintyRoute />} />
+        <Route path="/verification" element={<VerificationRoute />} />
+        <Route path="/vulnerability" element={<VulnerabilityRoute />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
