@@ -1,0 +1,228 @@
+{
+  "source": "Open-Meteo Historical Forecast API",
+  "endpoint": "https://historical-forecast-api.open-meteo.com/v1/forecast",
+  "model": "icon_seamless",
+  "timezone": "Asia/Colombo (UTC+05:30)",
+  "temporal": "hourly",
+  "requested_start": "20240101",
+  "requested_end": "20251231",
+  "variables": {
+    "shortwave_radiation": {
+      "column": "ghi_wh_m2",
+      "factor": 1.0
+    },
+    "wind_speed_10m": {
+      "column": "wind_10m_ms",
+      "factor": 0.2777777777777778
+    },
+    "wind_speed_80m": {
+      "column": "wind_50m_ms",
+      "factor": 0.25973920188036065
+    },
+    "temperature_2m": {
+      "column": "temp_2m_c",
+      "factor": 1.0
+    },
+    "relative_humidity_2m": {
+      "column": "humidity_2m_pct",
+      "factor": 1.0
+    },
+    "precipitation": {
+      "column": "precip_mm_hr",
+      "factor": 1.0
+    },
+    "surface_pressure": {
+      "column": "pressure_kpa",
+      "factor": 0.1
+    }
+  },
+  "computed": {
+    "ghi_clearsky_wh_m2": "Haurwitz clear-sky GHI, mean of the preceding hour"
+  },
+  "grid": {
+    "cells_to_sites": {
+      "9.75,79.75": [
+        "Eluvaitivu",
+        "Analaitivu"
+      ],
+      "9.625,79.75": [
+        "Nainativu"
+      ],
+      "9.5,79.75": [
+        "Delft-Neduntivu"
+      ]
+    },
+    "distinct_cells": 3,
+    "site_count": 4,
+    "measured_distinct_series": {
+      "ghi_wh_m2": {
+        "count": 3,
+        "groups": [
+          [
+            "Delft-Neduntivu"
+          ],
+          [
+            "Eluvaitivu",
+            "Analaitivu"
+          ],
+          [
+            "Nainativu"
+          ]
+        ]
+      },
+      "ghi_clearsky_wh_m2": {
+        "count": 4,
+        "groups": [
+          [
+            "Analaitivu"
+          ],
+          [
+            "Delft-Neduntivu"
+          ],
+          [
+            "Eluvaitivu"
+          ],
+          [
+            "Nainativu"
+          ]
+        ]
+      },
+      "wind_10m_ms": {
+        "count": 3,
+        "groups": [
+          [
+            "Delft-Neduntivu"
+          ],
+          [
+            "Eluvaitivu",
+            "Analaitivu"
+          ],
+          [
+            "Nainativu"
+          ]
+        ]
+      },
+      "wind_50m_ms": {
+        "count": 3,
+        "groups": [
+          [
+            "Delft-Neduntivu"
+          ],
+          [
+            "Eluvaitivu",
+            "Analaitivu"
+          ],
+          [
+            "Nainativu"
+          ]
+        ]
+      },
+      "temp_2m_c": {
+        "count": 3,
+        "groups": [
+          [
+            "Delft-Neduntivu"
+          ],
+          [
+            "Eluvaitivu",
+            "Analaitivu"
+          ],
+          [
+            "Nainativu"
+          ]
+        ]
+      },
+      "humidity_2m_pct": {
+        "count": 3,
+        "groups": [
+          [
+            "Delft-Neduntivu"
+          ],
+          [
+            "Eluvaitivu",
+            "Analaitivu"
+          ],
+          [
+            "Nainativu"
+          ]
+        ]
+      },
+      "precip_mm_hr": {
+        "count": 3,
+        "groups": [
+          [
+            "Delft-Neduntivu"
+          ],
+          [
+            "Eluvaitivu",
+            "Analaitivu"
+          ],
+          [
+            "Nainativu"
+          ]
+        ]
+      },
+      "pressure_kpa": {
+        "count": 3,
+        "groups": [
+          [
+            "Delft-Neduntivu"
+          ],
+          [
+            "Eluvaitivu",
+            "Analaitivu"
+          ],
+          [
+            "Nainativu"
+          ]
+        ]
+      }
+    }
+  },
+  "sites": {
+    "Eluvaitivu": {
+      "latitude": 9.76,
+      "longitude": 79.77,
+      "returned_cell": [
+        9.75,
+        79.75
+      ],
+      "rows": 17544,
+      "missing_values": 0,
+      "file": "Eluvaitivu_hourly.csv"
+    },
+    "Analaitivu": {
+      "latitude": 9.72,
+      "longitude": 79.79,
+      "returned_cell": [
+        9.75,
+        79.75
+      ],
+      "rows": 17544,
+      "missing_values": 0,
+      "file": "Analaitivu_hourly.csv"
+    },
+    "Nainativu": {
+      "latitude": 9.615,
+      "longitude": 79.775,
+      "returned_cell": [
+        9.625,
+        79.75
+      ],
+      "rows": 17544,
+      "missing_values": 0,
+      "file": "Nainativu_hourly.csv"
+    },
+    "Delft-Neduntivu": {
+      "latitude": 9.52,
+      "longitude": 79.69,
+      "returned_cell": [
+        9.5,
+        79.75
+      ],
+      "rows": 17544,
+      "missing_values": 0,
+      "file": "Delft-Neduntivu_hourly.csv"
+    }
+  }
+}

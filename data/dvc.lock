@@ -142,3 +142,26 @@ stages:
       hash: md5
       md5: db258bd27a5c2e3f7b4263f110761baa
       size: 16385
+  open_meteo_pull:
+    cmd: "PYTHONPATH=services/learned/module1_state_forecasting/src python -m module1.data.open_meteo
+      fetch data/raw/open_meteo --start 20240101 --end 20251231\n"
+    outs:
+    - path: data/raw/open_meteo
+      hash: md5
+      md5: 0ac26b26c1ddcdf86478324335998d2b.dir
+      size: 5137936
+      nfiles: 5
+  open_meteo_check:
+    cmd: "PYTHONPATH=services/learned/module1_state_forecasting/src python -m module1.data.open_meteo
+      validate data/raw/open_meteo\n"
+    deps:
+    - path: data/raw/open_meteo
+      hash: md5
+      md5: 0ac26b26c1ddcdf86478324335998d2b.dir
+      size: 5137936
+      nfiles: 5
+    - path: 
+        services/learned/module1_state_forecasting/src/module1/data/open_meteo.py
+      hash: md5
+      md5: 23f7b5eaa690b8e5ec16a2334948cff3
+      size: 14753

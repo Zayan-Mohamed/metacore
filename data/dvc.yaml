@@ -72,6 +72,36 @@ stages:
       - data/raw/nasa_power
       - services/learned/module1_state_forecasting/src/module1/data/nasa_power.py
 
+  open_meteo_pull:
+    wdir: ..
+    frozen: true
+    desc: >
+      ADR 0006 live-weather mode: the same four sites and NASA POWER file layout, from the
+      Open-Meteo Historical Forecast API with one pinned model (module1.data.open_meteo.MODEL),
+      so the forecaster can be trained on the product it sees live. Frozen like the NASA pull:
+      a network pull, refreshed deliberately with
+      `dvc repro --force data/dvc.yaml:open_meteo_pull`.
+    cmd: >
+      PYTHONPATH=services/learned/module1_state_forecasting/src
+      python -m module1.data.open_meteo fetch data/raw/open_meteo
+      --start 20240101 --end 20251231
+    outs:
+      - data/raw/open_meteo:
+          cache: false
+
+  open_meteo_check:
+    wdir: ..
+    desc: >
+      Gate: the NASA POWER invariants (hour count, no negative irradiance, wind or rain, dark at
+      local midnight, lit at local midday) plus the pinned-model rule, so a pull from another
+      model cannot pass as the training source.
+    cmd: >
+      PYTHONPATH=services/learned/module1_state_forecasting/src
+      python -m module1.data.open_meteo validate data/raw/open_meteo
+    deps:
+      - data/raw/open_meteo
+      - services/learned/module1_state_forecasting/src/module1/data/open_meteo.py
+
   load_downscale:
     wdir: ..
     desc: >
