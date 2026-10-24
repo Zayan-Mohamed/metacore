@@ -240,3 +240,51 @@ def grid_state_snapshot(req: Module1SnapshotRequest) -> dict:
         raise HTTPException(status_code=500,
                             detail=proc.stderr.strip()[-4000:] or "Module 1 snapshot failed")
     return json.loads(proc.stdout)
+
+
+# ---------------------------------------------------------------- dashboard monitoring pages
+# Read-only views for the Live (replay), Data health and Model graph pages. Each shells out to a
+# Module 1 CLI or serves a committed artifact, so the gateway still carries no M1 logic.
+
+REPLAY_JSON = (REPO_ROOT / "reports" / "data-analysis-report" / "m1"
+               / "replay_v0_1_om_equal.json")
+
+
+def _run_json(argv: list[str], what: str) -> dict:
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            [str(MODULE1_SRC), str(CONTRACTS_PY), os.environ.get("PYTHONPATH", "")]
+        ),
+    }
+    try:
+        proc = subprocess.run([sys.executable, *argv], cwd=REPO_ROOT, capture_output=True,
+                              text=True, timeout=RUN_TIMEOUT_S, env=env)
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(status_code=504, detail=f"Module 1 {what} timed out") from exc
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        detail = proc.stderr.strip()[-4000:] or f"Module 1 {what} produced no JSON"
+        raise HTTPException(status_code=500, detail=detail) from exc
+
+
+@router.get("/replay")
+def get_replay() -> dict:
+    """The held-out test quarter, hour by hour, with stored forecasts (ADR 0006 replay mode)."""
+    if not REPLAY_JSON.exists():
+        raise HTTPException(status_code=503, detail="replay file absent: run "
+                            "python -m module1.infer.replay build")
+    return json.loads(REPLAY_JSON.read_text())
+
+
+@router.get("/data-health")
+def get_data_health() -> dict:
+    """Every calibration gate, run now. A failing gate is reported in the body, not as a 500."""
+    return _run_json(["-m", "module1.data.health", "--json"], "data health")
+
+
+@router.get("/graph")
+def get_graph() -> dict:
+    """The forecaster's graph: nodes, edges, propagation matrix and the graph ablations."""
+    return _run_json(["-m", "module1.graph", "--json"], "graph")

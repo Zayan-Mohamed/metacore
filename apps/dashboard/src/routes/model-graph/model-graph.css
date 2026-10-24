@@ -1,0 +1,41 @@
+/* Module 1 Model graph page — diagram and the two 10 x 10 matrices. */
+.mg__diagram {
+  margin-top: 10px;
+}
+.mg__diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.mg__matrix {
+  margin-top: 12px;
+  display: grid;
+  gap: 2px;
+  overflow-x: auto;
+}
+.mg__mrow {
+  display: grid;
+  grid-template-columns: 84px repeat(10, minmax(30px, 1fr));
+  gap: 2px;
+  min-width: 420px;
+}
+.mg__mhead {
+  font-size: 9.5px;
+  color: var(--text-dim);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.mg__mlabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mg__mcell {
+  font-size: 10px;
+  text-align: center;
+  border-radius: 3px;
+  padding: 4px 0;
+}
