@@ -243,12 +243,8 @@ def grid_state_snapshot(req: Module1SnapshotRequest) -> dict:
 
 
 # ---------------------------------------------------------------- dashboard monitoring pages
-# Read-only views for the Live (replay), Data health and Model graph pages. Each shells out to a
+# Read-only views for the Data health and Model graph pages. Each shells out to a
 # Module 1 CLI or serves a committed artifact, so the gateway still carries no M1 logic.
-
-REPLAY_JSON = (REPO_ROOT / "reports" / "data-analysis-report" / "m1"
-               / "replay_v0_1_om_equal.json")
-
 
 def _run_json(argv: list[str], what: str) -> dict:
     env = {
@@ -267,15 +263,6 @@ def _run_json(argv: list[str], what: str) -> dict:
     except json.JSONDecodeError as exc:
         detail = proc.stderr.strip()[-4000:] or f"Module 1 {what} produced no JSON"
         raise HTTPException(status_code=500, detail=detail) from exc
-
-
-@router.get("/replay")
-def get_replay() -> dict:
-    """The held-out test quarter, hour by hour, with stored forecasts (ADR 0006 replay mode)."""
-    if not REPLAY_JSON.exists():
-        raise HTTPException(status_code=503, detail="replay file absent: run "
-                            "python -m module1.infer.replay build")
-    return json.loads(REPLAY_JSON.read_text())
 
 
 @router.get("/data-health")

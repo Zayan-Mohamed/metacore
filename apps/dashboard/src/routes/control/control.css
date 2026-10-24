@@ -1,0 +1,189 @@
+/* Control room: one screen, many panels. Panel chrome comes from styles/page.css. */
+.cr__inner {
+  max-width: 1680px;
+  margin: 0 auto;
+  padding: 14px 20px 40px;
+}
+.cr__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  padding: 10px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.cr__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+}
+.cr__bar-items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cr__link {
+  color: var(--text);
+}
+.cr__bad {
+  color: var(--red) !important;
+  font-weight: 600;
+}
+
+/* the panel layout: 12 columns on a wide screen, stacked below */
+.cr__grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0 14px;
+  align-items: start;
+}
+.cr__grid > .pg__card {
+  margin-top: 14px;
+  padding: 16px 18px;
+}
+/* Rows: alerts | vulnerability + grid check | weather + uncertainty + decision | skill + history
+   | data quality. Placed with `order` so the markup can stay in reading order. */
+.cr__alerts { grid-column: span 12; order: 0; }
+.cr__vuln { grid-column: span 5; order: 1; }
+.cr__gridpanel { grid-column: span 7; order: 2; }
+.cr__weather { grid-column: span 5; order: 3; }
+.cr__unc { grid-column: span 4; order: 4; }
+.cr__m3 { grid-column: span 3; order: 5; }
+.cr__skill { grid-column: span 6; order: 6; }
+.cr__hist { grid-column: span 6; order: 7; }
+.cr__quality { grid-column: span 12; order: 8; }
+.cr .pg__table td.num { white-space: nowrap; }
+@media (max-width: 1280px) {
+  .cr__vuln, .cr__gridpanel, .cr__weather, .cr__unc, .cr__m3, .cr__skill, .cr__hist { grid-column: span 6; }
+}
+@media (max-width: 860px) {
+  .cr__grid > .pg__card { grid-column: span 12; }
+  .cr__inner { padding: 12px 16px 32px; }
+}
+
+/* alerts */
+.cr__alert-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  font-size: 12.5px;
+}
+.cr__alert {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 10px;
+  border-radius: 7px;
+  background: var(--surface-2);
+  border-left: 3px solid var(--border);
+}
+.cr__alert--critical { border-left-color: var(--red); }
+.cr__alert--warning { border-left-color: var(--amber); }
+.cr__alert--info { border-left-color: var(--text-dim); }
+.cr__alert-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* vulnerability heat grid */
+.cr__heat {
+  margin-top: 12px;
+  display: grid;
+  gap: 3px;
+  overflow-x: auto;
+}
+.cr__heat-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.5fr) repeat(7, minmax(40px, 1fr));
+  gap: 3px;
+  align-items: center;
+  min-width: 440px;
+}
+.cr__heat-row--head {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: center;
+}
+.cr__heat-row--head > span:first-child { text-align: left; }
+.cr__heat-label {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cr__cell {
+  font-size: 11px;
+  text-align: center;
+  border-radius: 4px;
+  padding: 5px 0;
+}
+
+/* grid hours strip */
+.cr__hours {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+.cr__hour {
+  font: inherit;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  padding: 8px 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.cr__hour.is-on { border-color: var(--blue); }
+.cr__hour .pg__card-sub { margin-top: 0; font-size: 11px; }
+
+/* uncertainty bars */
+.cr__bars {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+.cr__bar-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1.2fr) 2fr 40px minmax(64px, 0.8fr);
+  gap: 8px;
+  align-items: center;
+}
+.cr__bar-row .pg__card-sub { margin-top: 0; }
+.cr__bar-track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--border);
+}
+.cr__bar-track > span:first-child {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+.cr__bar-thr {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: var(--text-muted);
+}
+.cr__bar-val { font-size: 11.5px; text-align: right; }

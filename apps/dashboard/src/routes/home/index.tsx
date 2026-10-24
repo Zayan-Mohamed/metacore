@@ -18,11 +18,10 @@ const MODULES: ModuleCard[] = [
     owner: "Zayan",
     summary: "Fuses weather, load and asset data into one state per node and forecasts each node's vulnerability six hours ahead.",
     pages: [
-      { to: "/live", label: "Live", blurb: "Hour-by-hour forecasts and rolling scores (replay)" },
       { to: "/vulnerability", label: "Vulnerability forecast", blurb: "ST-GNN v0.1 on the held-out quarter" },
       { to: "/agent-state", label: "State representation", blurb: "28 features and their quality mask" },
       { to: "/model-graph", label: "Model graph", blurb: "What the graph mixes and whether it helps" },
-      { to: "/grid", label: "Grid", blurb: "Four-island network and hourly feeder state" },
+      { to: "/grid", label: "Grid (recorded hours)", blurb: "Four-island network on any 2024-2025 hour" },
       { to: "/data-health", label: "Data health", blurb: "Every pipeline gate, run now" },
     ],
   },
@@ -64,7 +63,7 @@ function StatusStrip() {
   return (
     <dl className="home__status">
       <div><dt>Data gates</dt><dd className={`home__status-${gates.cls}`}><Link to="/data-health">{gates.text}</Link></dd></div>
-      <div><dt>Live pipeline</dt><dd className="home__status-warn"><Link to="/live">on hold · replay mode</Link></dd></div>
+      <div><dt>Live system</dt><dd><Link to="/">control room →</Link></dd></div>
       <div><dt>Live model</dt><dd className="mono">stgnn_v0_1_om_equal</dd></div>
       <div><dt>Weather source</dt><dd>Open-Meteo ICON (live) · NASA POWER (paper)</dd></div>
     </dl>

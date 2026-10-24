@@ -768,7 +768,7 @@ export async function runModule4Verify(
 }
 
 // ---------------------------------------------------------------- Module 1 monitoring pages
-// Live (replay), Data health, Grid and Model graph. All read-only GETs against
+// Data health, Grid and Model graph. All read-only GETs against
 // gateway routers/module1.py, except the grid snapshot, which is a POST like /forecast.
 
 async function getJson<T>(url: string, makeError: (detail: string, status: number) => Error): Promise<T> {
@@ -784,39 +784,6 @@ async function getJson<T>(url: string, makeError: (detail: string, status: numbe
 const m1Error = (detail: string, status: number) => new Module1RunError(detail, status);
 
 export type Quality = "QUALITY_OBSERVED" | "QUALITY_INTERPOLATED" | "QUALITY_STALE" | "QUALITY_MISSING";
-
-/** The held-out test quarter with stored forecasts. All scores are integers in 1/scale. */
-export interface Module1Replay {
-  kind: "replay";
-  note: string;
-  model: string;
-  variant: string;
-  weather_source: string;
-  weighting: Module1Weighting;
-  tau: number;
-  horizon_h: number;
-  history_h: number;
-  scale: number;
-  nodes: { id: string; island: string; asset: string }[];
-  /** Every hour covered, history included. */
-  hours: string[];
-  /** Index into hours of forecast origin 0. */
-  first_origin: number;
-  /** [hour][node] realised target. */
-  truth: number[][];
-  components: Record<"hazard" | "fragility" | "stress", number[][]>;
-  /** [origin][node][horizon]. */
-  forecast: Record<"stgnn" | "lstm_1d_residual", number[][][]>;
-  weather: Record<string, Record<"wind_50m_ms" | "precip_mm_hr" | "ghi_wh_m2", (number | null)[]>>;
-  quality: Record<string, Quality>;
-  events: Record<string, [string, string]>;
-  test_summary: Record<"stgnn" | "lstm_1d_residual" | "persistence",
-    { rmse_mean: number; mase: number; onset_recall: number; ditwah_rmse: number }>;
-}
-
-export function fetchModule1Replay(): Promise<Module1Replay> {
-  return getJson<Module1Replay>("/api/module1/replay", m1Error);
-}
 
 export interface FileInfo {
   path: string;
@@ -963,4 +930,87 @@ export function fetchModule1Topology(): Promise<Module1Topology> {
 
 export function snapshotModule1(timestamp: string): Promise<Module1Snapshot> {
   return postJson<Module1Snapshot>("/api/module1/snapshot", { timestamp }, m1Error);
+}
+
+// ---------------------------------------------------------------- live system (control room)
+// What the hourly pipeline stored (gateway routers/live.py). Read-only.
+
+export interface LiveNode {
+  id: string;
+  island: string;
+  asset: string;
+  history: number[];
+  current: number;
+  forecast: Record<"stgnn" | "lstm_1d_residual" | "persistence", number[]>;
+  components_now: Record<"hazard" | "fragility" | "stress", number>;
+}
+
+export interface LiveIsland {
+  hours: string[];
+  load_kw: number[];
+  installed_kva: number;
+  wind_50m_ms: number[];
+  precip_mm_hr: number[];
+  ghi_wh_m2: number[];
+  temp_2m_c: number[];
+}
+
+export interface LiveGridHour {
+  hour: string;
+  lead_h: number;
+  hazard_level: number;
+  decision: string;
+  violations: { type: string; element_id: string; limit: number; measured: number }[];
+  unverified_reasons: string[];
+  certificate: { upper_bound: number; n_failures: number; n_scenarios: number; notes?: string[] } | null;
+  verify_ms: number;
+  buses: { bus: string; voltage_pu: number; status: string }[];
+  lines: { line: string; amps: number; rating_amps: number; loading_pct: number | null; in_service: boolean }[];
+  adequacy: { island: string; station: string; demand_kva: number; capacity_kva: number }[];
+  assets_out_of_service: string[];
+  v_min_pu: number;
+  v_max_pu: number;
+}
+
+export interface LiveLatest {
+  run: { id: number; issued_for: string; started_at: string; finished_at: string | null; status: string;
+    stage_ms: Record<string, number>; errors: string[]; runs_stored: number };
+  weather_fetch: { fetched_at: string; model: string; endpoint: string; cells: Record<string, number[]> };
+  module1: {
+    kind: "live"; issued_for: string; horizon_hours: string[]; tau: number; weighting: string;
+    models: Record<string, string>; weather_source: string; ledger_year_used: string;
+    fragility_carried_forward: boolean; input_sha256: string; latency_ms: number;
+    nodes: LiveNode[]; islands: Record<string, LiveIsland>; above_tau_t1: string[];
+    quality: Record<string, Quality>;
+  };
+  module2: {
+    head: string; class_names: string[]; value_threshold: number; hysteresis_h: number;
+    nodes: { node: string; epistemic_uncertainty: number; competence_drop: boolean; trigger_reason: string;
+      state_class: number; class_probabilities: number[]; observed_fraction: number }[];
+  } | null;
+  module3: { connected: boolean; reason: string; owner: string };
+  module4: LiveGridHour[];
+}
+
+export interface LiveHistory {
+  runs: { run_id: number; issued_for: string; status: string; current: Record<string, number> | null;
+    v_min_pu: number | null; max_line_pct: number | null; decision: string | null }[];
+}
+
+export interface LiveScores {
+  window_runs: number;
+  first_scored_hour: string | null;
+  last_scored_hour: string | null;
+  hours_scored: number;
+  models: Record<string, { n: number; rmse: number | null; by_lead: Record<number, { n: number; rmse: number; mae: number }> }>;
+}
+
+export function fetchLive(): Promise<LiveLatest> {
+  return getJson<LiveLatest>("/api/live/latest", m1Error);
+}
+export function fetchLiveHistory(hours: number): Promise<LiveHistory> {
+  return getJson<LiveHistory>(`/api/live/history?hours=${hours}`, m1Error);
+}
+export function fetchLiveScores(hours: number): Promise<LiveScores> {
+  return getJson<LiveScores>(`/api/live/scores?hours=${hours}`, m1Error);
 }

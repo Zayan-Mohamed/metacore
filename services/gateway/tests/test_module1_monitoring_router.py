@@ -1,24 +1,10 @@
-"""/api/module1/replay, /data-health and /graph: the dashboard's monitoring pages over HTTP."""
+"""/api/module1/data-health and /graph: the dashboard's monitoring pages over HTTP."""
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
 from gateway.main import app
 
 client = TestClient(app)
-
-
-def test_replay_is_the_test_quarter_with_both_models() -> None:
-    r = client.get("/api/module1/replay")
-    assert r.status_code == 200, r.text
-    d = r.json()
-    assert d["kind"] == "replay" and d["weather_source"] == "open_meteo"
-    n_hours, n_nodes = len(d["hours"]), len(d["nodes"])
-    assert len(d["truth"]) == n_hours and len(d["truth"][0]) == n_nodes
-    origins = n_hours - d["first_origin"] - d["horizon_h"]
-    for model in ("stgnn", "lstm_1d_residual"):
-        f = d["forecast"][model]
-        assert len(f) == origins and len(f[0]) == n_nodes and len(f[0][0]) == d["horizon_h"]
-    assert d["hours"][d["first_origin"]].startswith("2025-10-01")
 
 
 def test_data_health_runs_every_gate_and_never_shows_ledger_figures() -> None:
