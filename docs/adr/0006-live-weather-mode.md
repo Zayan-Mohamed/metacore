@@ -30,7 +30,9 @@ not available. Each of these has to change explicitly, not drift.
 
 1. **A third source mode, `live-weather`, for Module 1 only.** Weather is live; the electrical
    state stays modelled. ADR 0004's constraint holds for everything electrical: no live mode is
-   claimed for load, generation or asset state.
+   claimed for load, generation or asset state, and **none is needed**: the electrical inputs
+   come from the calibrated 2024-2025 dataset the model was trained and tested on. Live
+   operation only has to fill the hours after the last ledger month, as follows.
    - Load for months with no ledger is the same calendar month of the last ledger year, scaled
      by the same diurnal model, and flagged `QUALITY_INTERPOLATED`.
    - Fragility is carried forward from the last ledger month and flagged `QUALITY_STALE` once
@@ -107,8 +109,9 @@ must be there.
   remains future work, as the proposal states.
 - **Live scores test the weather-driven part of the target.** Load is extrapolated from 2025
   and fragility goes stale, so the stress and fragility terms are not being validated live. The
-  stale-fragility flag grows with every month without a new ledger; a 2026 ledger from CEB
-  refreshes it.
+  stale-fragility flag grows with every month without a new ledger. The monthly 2026 ledger
+  pages from CEB (a dataset update, not a live feed) would replace the copied load with real
+  monthly energy, refresh fragility, and give a further unseen period for testing.
 - **Two trained models exist**: NASA-trained v0.1 (paper results) and the Open-Meteo-trained
   model (live). Each carries its weather source in its model card.
 - **NFR7 changes** from "institutional server" to "provider VM, data-minimised and encrypted,

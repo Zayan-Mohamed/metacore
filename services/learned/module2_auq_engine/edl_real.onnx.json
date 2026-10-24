@@ -114,7 +114,7 @@
   },
   "trigger": {
     "note": "Calibrated on real training u at train time, so serving needs no calibration pass. Fitting it on demand would mean rebuilding M1's 17,544-hour record and re-scoring 400 rows on the first request -- a cold start on the live toggle.",
-    "value_threshold": 0.9500935077667236,
+    "value_threshold": 0.9214440584182739,
     "value_false_alarm_rate": 0.05,
     "observed_fraction_floor": 0.35
   },
@@ -140,10 +140,10 @@
   "export": {
     "opset": 18,
     "exporter": "torch.onnx.export(dynamo=True)",
-    "torch_version": "2.13.0+cpu"
+    "torch_version": "2.13.0"
   },
   "verification": {
     "atol": 1e-05,
-    "max_abs_diff_vs_torch": 0.0
+    "max_abs_diff_vs_torch": 1.52587890625e-05
   }
 }
