@@ -167,10 +167,15 @@ def score(res: dict, preds: dict, yte, data, wname, origins) -> None:
     res["significance_vs_stgnn"] = significance(preds, yte, data, origins)
 
 
-def rescore(out: Path, tag: str, data_root) -> int:
+def run_tag(variant: str, weather: str) -> str:
+    """v0_1 for the NASA-trained paper model; v0_1_om for the Open-Meteo-trained live model."""
+    return variant.replace(".", "_") + ("_om" if weather == "open_meteo" else "")
+
+
+def rescore(out: Path, tag: str, data_root, weather: str = "nasa_power") -> int:
     path = out / f"forecast_{tag}_metrics.json"
     report = json.loads(path.read_text())
-    data = ds.build(data_root)
+    data = ds.build(data_root, report.get("config", {}).get("weather", weather))
     for wname, res in report["results"].items():
         z = np.load(out / f"test_predictions_{tag}_{wname}.npz")
         preds = {name: z[name] for name in res["models"]}
@@ -202,13 +207,15 @@ def main(argv=None) -> int:
     ap.add_argument("--data-root", default=None)
     ap.add_argument("--weightings", nargs="*", default=list(tgt.WEIGHTINGS))
     ap.add_argument("--variant", default="v0", choices=sorted(VARIANTS))
+    ap.add_argument("--weather", default="nasa_power", choices=ds.WEATHER_SOURCES,
+                    help="weather source to train on (ADR 0006); open_meteo tags outputs _om")
     ap.add_argument("--rescore", action="store_true",
                     help="recompute test metrics from saved predictions; no training")
     args = ap.parse_args(argv)
-    cfg = dict(CONFIG, variant=args.variant)
-    tag = args.variant.replace(".", "_")
+    cfg = dict(CONFIG, variant=args.variant, weather=args.weather)
+    tag = run_tag(args.variant, args.weather)
     if args.rescore:
-        return rescore(Path(args.out), tag, args.data_root)
+        return rescore(Path(args.out), tag, args.data_root, args.weather)
     if not args.ckpt:
         ap.error("--ckpt is required when training")
     out, ckpt = Path(args.out), Path(args.ckpt)
@@ -216,7 +223,7 @@ def main(argv=None) -> int:
     ckpt.mkdir(parents=True, exist_ok=True)
     torch.set_num_threads(max(1, torch.get_num_threads()))
 
-    data = ds.build(args.data_root)
+    data = ds.build(args.data_root, args.weather)
     check_invariants(data.graph)
     a_hat = torch.tensor(data.graph.normalized(), dtype=torch.float32)
     report: dict = {

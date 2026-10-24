@@ -109,3 +109,37 @@ Ditwah it is no better than the residual LSTM, and in Ditwah it does not beat pe
 - **Ditwah is one event of six days.** Its numbers show behaviour under an unseen cyclone; they
   are not a population estimate. Hourly errors are autocorrelated, which the DM test accounts for
   but a plain RMSE comparison does not.
+
+## Open-Meteo-trained model (ADR 0006, the live model)
+
+`forecast_v0_1_om_metrics.json`. Same architecture, split, seed and budget as v0.1, trained on
+the Open-Meteo ICON pull instead of NASA POWER. The target's hazard term is built from the same
+weather, so **each model predicts its own source's target** (the two targets correlate at 0.84,
+0.79 and 0.90 by weighting). Compare each model with its own baselines, not across sources.
+
+| Weighting | Persistence | 1-D LSTM + residual | **ST-GNN** | ST-GNN vs LSTM + res. (DM, p) | No-weather |
+|---|---|---|---|---|---|
+| Equal | 0.0455 | 0.0330 | **0.0300** | -8.9% (-3.67, < 0.001) | 0.0289 |
+| Hazard-heavy | 0.0536 | 0.0480 | **0.0430** | -10.4% (-4.64, < 0.001) | 0.0426 |
+| Stress-heavy | 0.0530 | 0.0258 | **0.0247** | -4.3% (-1.39, 0.16) | 0.0234 |
+
+| Weighting | Onset recall ST-GNN / LSTM + res. | Ditwah RMSE ST-GNN / LSTM + res. / persistence |
+|---|---|---|
+| Equal | 38% / 58% | 0.0364 / 0.0423 / 0.0444 |
+| Hazard-heavy | 29% / 50% | 0.0507 / 0.0611 / 0.0532 |
+| Stress-heavy | 50% / 72% | 0.0306 / 0.0344 / 0.0518 |
+
+What changed with the source:
+
+- **Lower mean error than both baselines under every weighting**, significant under equal and
+  hazard-heavy, not under stress-heavy.
+- **Hazard-heavy Ditwah improves**: the ST-GNN now beats persistence there (0.0507 vs 0.0532),
+  which the NASA model did not (not significant, DM p = 0.09).
+- **Onset recall falls below the residual LSTM** under every weighting (38/29/50% against
+  58/50/72%). The NASA-trained model led on this metric; the live model does not. Its forecasts
+  are smoother and cross τ less often.
+- **Three weather series do not make the graph help**: graph -2.4%, +0.6%, -5.9%; weather inputs
+  -4.1%, -0.9%, -5.4%. The no-weather variant is again best or tied.
+- ICON's target is rougher (persistence RMSE 0.046-0.054 against 0.038-0.047), consistent with
+  its wet bias (about twice the regional rainfall).
+

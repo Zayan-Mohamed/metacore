@@ -74,6 +74,8 @@ reports/**/test_predictions_*.npz
 # The trained ST-GNN v0.1 (equal weighting), 92 KB: lets /module1/forecast and the dashboard
 # page work from a clean clone, and un-skips the gateway forecast tests in CI (PR #12 review).
 !services/learned/module1_state_forecasting/artifacts/stgnn_v0_1_equal.pt
+# ADR 0006: the Open-Meteo-trained model the live worker serves.
+!services/learned/module1_state_forecasting/artifacts/stgnn_v0_1_om_equal.pt
 
 # M4's frozen calibration (bands, miss rows, input hashes), ~650 KB. The verifier reads it on
 # every call and `python -m verification.calibrate check` asserts it rebuilds byte-identically.

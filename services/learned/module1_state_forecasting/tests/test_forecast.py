@@ -309,3 +309,19 @@ def test_ditwah_window_lies_in_the_test_quarter_and_is_stormy() -> None:
     assert masks["ditwah"].sum() == 144                       # 25-30 Nov, hourly
     assert masks["storm"][masks["ditwah"]].mean() > 0.9       # the cyclone is in the data
     assert not (masks["normal"] & masks["storm"]).any()
+
+
+def test_unknown_weather_source_is_refused() -> None:
+    with pytest.raises(ValueError, match="weather_source"):
+        ds.build(weather_source="best_match")
+
+
+@needs_artifacts
+def test_open_meteo_build_keeps_the_split_and_changes_only_the_weather() -> None:
+    nasa, om = ds.build(), ds.build(weather_source="open_meteo")
+    assert list(om.timestamps) == list(nasa.timestamps)
+    assert om.split_index == nasa.split_index and om.x.shape == nasa.x.shape
+    load = ds.FEATURES.index("load_kw_norm")
+    assert np.array_equal(om.x[..., load], nasa.x[..., load])        # electrical inputs unchanged
+    wind = ds.FEATURES.index("wind_50m_ms_norm")
+    assert not np.array_equal(om.x[..., wind], nasa.x[..., wind])
