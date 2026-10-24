@@ -140,9 +140,19 @@ function buildAlerts(d: LiveLatest): Alert[] {
       meaning: `Its uncertainty (${n.epistemic_uncertainty.toFixed(2)}) stayed above ${d.module2!.value_threshold.toFixed(2)} for ${d.module2!.hysteresis_h} hours in a row: this state does not look like the states Module 2 was trained on (reason: ${n.trigger_reason}).`,
       next: "In the full system this sends the decision to Module 3's slow, careful path. Until Module 3 is connected it is a flag for a human." });
   }
-  if (m1.fragility_carried_forward) out.push({ level: "ok", title: "Ledger data ends in December 2025",
-    meaning: "Load uses the same month of 2025, shaped by today's temperature. Asset fragility uses December 2025, the last month CEB provided.",
-    next: "New CEB ledger pages replace both automatically once added to the pipeline." });
+  const latest = d.ledger?.latest_month ?? m1.ledger_latest_month ?? "2025-12";
+  for (const f of d.ledger?.recent_files ?? []) {
+    if (minutesSince(f.received) > 24 * 60) continue;
+    if (f.status === "rejected") out.push({ level: "alert", title: `Ledger file rejected: ${f.file}`,
+      meaning: `It failed the checks, so none of it was used: ${f.failures.slice(0, 3).join("; ")}${f.failures.length > 3 ? ` (+${f.failures.length - 3} more)` : ""}.`,
+      next: "Fix or re-export the workbook and save it into the inbox again; the next hourly run re-checks it." });
+    else if (f.status === "accepted") out.push({ level: "ok", title: `Ledger updated: ${f.months_added.join(", ")}`,
+      meaning: `${f.file} passed the checks and its new months are in use from this run.${f.notes.length ? ` Note: ${f.notes[0]}.` : ""}`,
+      next: "Load and fragility for those months now come from CEB's figures instead of last year's." });
+  }
+  if (m1.fragility_carried_forward) out.push({ level: "ok", title: `Ledger data ends in ${latest}`,
+    meaning: `Load for months after ${latest} uses the same month of the latest year CEB recorded, shaped by today's temperature. Asset fragility uses ${latest}, the last month available.`,
+    next: "Save a newer CEB workbook into the ledger inbox (~/.metacore/ledger-inbox); the next hourly run checks it and uses it automatically." });
   if (!d.module3.connected) out.push({ level: "ok", title: "Module 3 (decision) not connected",
     meaning: "The grid check below assumes no control action is taken.", next: `Owner: ${d.module3.owner}.` });
   return out;
@@ -481,7 +491,8 @@ export default function ControlRoute() {
           <dl className="cr__facts cr__facts--row">
             <div><dt>Weather</dt><dd>Today's, from a weather model</dd></div>
             <div><dt>Load</dt><dd>{m1.ledger_year_used} ledger, same month, shaped by today's temperature</dd></div>
-            <div><dt>Asset fragility</dt><dd>{m1.fragility_carried_forward ? "Carried from Dec 2025 (stale)" : "From the ledger"}</dd></div>
+            <div><dt>CEB ledger</dt><dd>Up to {d.ledger?.latest_month ?? m1.ledger_latest_month ?? "2025-12"} · {d.ledger?.source ?? m1.ledger_source ?? "calibration"}<Info text="New monthly workbooks saved into ~/.metacore/ledger-inbox are checked (layout, complete months, plausibility against each plant's own record, no rewriting of reconciled months) and used from the next hourly run. A file that fails is rejected and shown as an alert." /></dd></div>
+            <div><dt>Asset fragility</dt><dd>{m1.fragility_carried_forward ? `Carried from ${d.ledger?.latest_month ?? m1.ledger_latest_month ?? "2025-12"} (stale)` : "From the ledger"}</dd></div>
             <div><dt>Electrical readings</dt><dd>None exist on the islands</dd></div>
           </dl>
           <p className="cr__footnote"><Link to="/data-health">Data checks →</Link> · <Link to="/model-graph">How the model works →</Link></p>

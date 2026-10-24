@@ -54,6 +54,16 @@ CREATE TABLE IF NOT EXISTS grid_checks (     -- Module 4, one row per hour check
     PRIMARY KEY (run_id, lead_h)
 );
 
+-- Every workbook dropped into the ledger inbox, accepted or rejected (module1.data.live_ledger).
+CREATE TABLE IF NOT EXISTS ledger_updates (
+    sha256     TEXT PRIMARY KEY,
+    run_id     BIGINT REFERENCES runs(id) ON DELETE SET NULL,
+    file       TEXT NOT NULL,
+    received   TEXT NOT NULL,
+    status     TEXT NOT NULL,
+    result     JSONB NOT NULL
+);
+
 -- Scored after the fact: a forecast for hour H is scored by the run issued at H, whose "now"
 -- value is computed from the weather that actually arrived for H.
 CREATE TABLE IF NOT EXISTS live_scores (

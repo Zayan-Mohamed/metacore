@@ -51,6 +51,11 @@ def latest() -> dict[str, Any]:
         grid = c.execute("SELECT payload FROM grid_checks WHERE run_id = %s ORDER BY lead_h",
                          (run_id,)).fetchall()
         last = c.execute("SELECT max(started_at), count(*) FROM runs").fetchone()
+        try:
+            ledger = c.execute("SELECT file, received, status, result FROM ledger_updates "
+                               "ORDER BY received DESC LIMIT 5").fetchall()
+        except Exception:  # noqa: BLE001 -- a store from before the ledger feed existed
+            ledger = []
     m1 = dict(row[7])
     for n in m1.get("nodes", []):
         n.pop("embedding", None)  # 64 numbers per node; the screen does not draw them
@@ -64,6 +69,11 @@ def latest() -> dict[str, Any]:
         "module2": m2[0] if m2 else None,
         "module3": M3_STATUS,
         "module4": [g[0] for g in grid],
+        "ledger": {"latest_month": m1.get("ledger_latest_month"), "source": m1.get("ledger_source"),
+                   "recent_files": [{"file": f, "received": r, "status": s,
+                                     "months_added": res.get("months_added", []),
+                                     "failures": res.get("failures", []),
+                                     "notes": res.get("notes", [])} for f, r, s, res in ledger]},
     }
 
 

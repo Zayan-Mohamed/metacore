@@ -980,6 +980,7 @@ export interface LiveLatest {
     kind: "live"; issued_for: string; horizon_hours: string[]; tau: number; weighting: string;
     models: Record<string, string>; weather_source: string; ledger_year_used: string;
     fragility_carried_forward: boolean; input_sha256: string; latency_ms: number;
+    ledger_latest_month?: string; ledger_source?: string;
     nodes: LiveNode[]; islands: Record<string, LiveIsland>; above_tau_t1: string[];
     quality: Record<string, Quality>;
   };
@@ -990,6 +991,11 @@ export interface LiveLatest {
   } | null;
   module3: { connected: boolean; reason: string; owner: string };
   module4: LiveGridHour[];
+  ledger?: {
+    latest_month: string | null; source: string | null;
+    recent_files: { file: string; received: string; status: string; months_added: string[];
+      failures: string[]; notes: string[] }[];
+  };
 }
 
 export interface LiveHistory {

@@ -1,6 +1,7 @@
 """The live Metacore pipeline (ADR 0006): one run per hour, every module in its own process.
 
-    fetch (the only network call) -> M1 forecast + state + snapshots -> M2 uncertainty
+    ledger inbox (new CEB months, gated) -> fetch (the only network call)
+        -> M1 forecast + state + snapshots -> M2 uncertainty
         -> [M3: not connected, see docs/contracts/m3-live-migration.md] -> M4 grid check
         -> store everything -> score earlier forecasts whose hour has now arrived
 
@@ -68,6 +69,17 @@ def run_once(now: str | None = None) -> dict:
     stage_ms: dict[str, float] = {}
     errors: list[str] = []
     status = "ok"
+    try:  # new ledger months first, so this hour's forecast already uses them
+        ledger, stage_ms["ledger"] = _run("ledger", ["-m", "module1.data.live_ledger", "ingest",
+                                                     "--json"])
+        for res in ledger["results"]:
+            conn.execute("INSERT INTO ledger_updates (sha256, run_id, file, received, status, "
+                         "result) VALUES (%s,%s,%s,%s,%s,%s) ON CONFLICT DO NOTHING",
+                         (res["sha256"], run_id, res["file"], res["received"], res["status"],
+                          db.Jsonb(res)))
+    except StageFailed as exc:  # the forecast still runs on the ledger it already has
+        errors.append(str(exc))
+        status = "partial"
     try:
         weather, stage_ms["fetch"] = _run("fetch", ["-m", "module1.live", "fetch"])
         conn.execute(
