@@ -30,6 +30,7 @@ import numpy as np
 import torch
 
 from module1 import assemble as asm
+from module1.data import live_ledger
 from module1.data import load as loadmod
 from module1.data.nasa_power import COLUMNS
 from module1.data.scenarios import CORE_RATIO
@@ -70,12 +71,16 @@ class Frozen:
         self.tau = float(np.quantile(data.v[WEIGHTING][a:b], CONFIG["event_quantile"]))
 
         root = REPO_ROOT / "data"
-        tidy = root / "processed" / "ceb_generation_tidy.csv"
+        # New ledger months arrive through the watched inbox (module1.data.live_ledger) into a
+        # live-only store; the calibration table is used until the first one is accepted.
+        tidy = live_ledger.STORE if live_ledger.STORE.exists() else live_ledger.CALIBRATION
+        self.ledger_source = "live ledger" if live_ledger.STORE.exists() else "calibration"
         params = json.loads((root / "processed" / "load_parameters.json").read_text())
         self.peakiness = params["calibration"]["solved_peakiness_exponent"]
         self.installed_kva = params["measured_inputs"]["installed_kva"]
         self.monthly = loadmod.read_monthly_island_energy(tidy)
         self.ledger_years = sorted({y for y, _, _ in self.monthly})
+        self.ledger_latest = max(f"{y}-{m:02d}" for y, m, _ in self.monthly)
         nasa = loadmod.read_weather(root / "raw" / "nasa_power")
         self.median_c = {isl: statistics.median(t.values()) for isl, t in nasa.items()}
         self.nasa_temps = nasa
@@ -122,11 +127,14 @@ def frozen() -> Frozen:
 # ------------------------------------------------------------ electrical fill-in
 
 def ledger_month(fz: Frozen, stamp: str) -> tuple[str, bool]:
-    """(year whose ledger month is used, True if that is the hour's own year)."""
-    year = stamp[:4]
-    if year in fz.ledger_years:
+    """(year whose ledger month is used for this hour's calendar month, True if it is the hour's
+    own month). The newest year that recorded that month, so a partial year still works."""
+    year, month = stamp[:4], int(stamp[5:7])
+    have = [y for y in fz.ledger_years
+            if all((y, month, isl) in fz.monthly for isl in ds.ISLAND_ORDER)]
+    if year in have:
         return year, True
-    return fz.ledger_years[-1], False
+    return have[-1], False
 
 
 def live_load(fz: Frozen, island: str, stamps: list[str], temps: list[float | None]) -> np.ndarray:
@@ -137,9 +145,14 @@ def live_load(fz: Frozen, island: str, stamps: list[str], temps: list[float | No
         month = int(stamp[5:7])
         energy = fz.monthly[(year, month, island)]
         hours_in_month = loadmod.days_in_month(year, month) * 24
-        # Mean shape of that ledger month, from the temperatures the load stage used for it.
+        # Mean shape of that ledger month, from the temperatures the load stage used for it. A
+        # month newer than the reanalysis record uses the same calendar month of its last year.
+        temps_year = year if any(s.startswith(f"{year}-{month:02d}")
+                                 for s in fz.nasa_temps[island]) else max(
+            s[:4] for s in fz.nasa_temps[island] if s[5:7] == f"{month:02d}")
         ref = [loadmod._shape(datetime.fromisoformat(s), t, fz.median_c[island], fz.peakiness)
-               for s, t in fz.nasa_temps[island].items() if s.startswith(f"{year}-{month:02d}")]
+               for s, t in fz.nasa_temps[island].items()
+               if s.startswith(f"{temps_year}-{month:02d}")]
         mean_shape = sum(ref) / len(ref)
         shape = loadmod._shape(datetime.fromisoformat(stamp), temp, fz.median_c[island],
                                fz.peakiness)
@@ -266,6 +279,8 @@ def forecast(weather: dict[str, list[dict]], now: str, fetch_meta: dict | None =
         "models": MODEL_IDS,
         "weather_source": WEATHER,
         "ledger_year_used": ledger_month(fz, now)[0],
+        "ledger_latest_month": fz.ledger_latest,
+        "ledger_source": fz.ledger_source,
         "fragility_carried_forward": b["fragility_carried"],
         "input_sha256": hashlib.sha256(b["window"].tobytes()).hexdigest(),
         "latency_ms": round(latency_ms, 3),
