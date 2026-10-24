@@ -766,3 +766,201 @@ export async function runModule4Verify(
     (detail, status) => new Module4RunError(detail, status),
   );
 }
+
+// ---------------------------------------------------------------- Module 1 monitoring pages
+// Live (replay), Data health, Grid and Model graph. All read-only GETs against
+// gateway routers/module1.py, except the grid snapshot, which is a POST like /forecast.
+
+async function getJson<T>(url: string, makeError: (detail: string, status: number) => Error): Promise<T> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null);
+    const detail = typeof payload?.detail === "string" ? payload.detail : `request failed with status ${res.status}`;
+    throw makeError(detail, res.status);
+  }
+  return (await res.json()) as T;
+}
+
+const m1Error = (detail: string, status: number) => new Module1RunError(detail, status);
+
+export type Quality = "QUALITY_OBSERVED" | "QUALITY_INTERPOLATED" | "QUALITY_STALE" | "QUALITY_MISSING";
+
+/** The held-out test quarter with stored forecasts. All scores are integers in 1/scale. */
+export interface Module1Replay {
+  kind: "replay";
+  note: string;
+  model: string;
+  variant: string;
+  weather_source: string;
+  weighting: Module1Weighting;
+  tau: number;
+  horizon_h: number;
+  history_h: number;
+  scale: number;
+  nodes: { id: string; island: string; asset: string }[];
+  /** Every hour covered, history included. */
+  hours: string[];
+  /** Index into hours of forecast origin 0. */
+  first_origin: number;
+  /** [hour][node] realised target. */
+  truth: number[][];
+  components: Record<"hazard" | "fragility" | "stress", number[][]>;
+  /** [origin][node][horizon]. */
+  forecast: Record<"stgnn" | "lstm_1d_residual", number[][][]>;
+  weather: Record<string, Record<"wind_50m_ms" | "precip_mm_hr" | "ghi_wh_m2", (number | null)[]>>;
+  quality: Record<string, Quality>;
+  events: Record<string, [string, string]>;
+  test_summary: Record<"stgnn" | "lstm_1d_residual" | "persistence",
+    { rmse_mean: number; mase: number; onset_recall: number; ditwah_rmse: number }>;
+}
+
+export function fetchModule1Replay(): Promise<Module1Replay> {
+  return getJson<Module1Replay>("/api/module1/replay", m1Error);
+}
+
+export interface FileInfo {
+  path: string;
+  present: boolean;
+  bytes?: number;
+  files?: number;
+  modified?: string | null;
+}
+
+export interface DataGate {
+  id: string;
+  title: string;
+  checks: string;
+  status: "pass" | "fail" | "error";
+  failures: string[];
+  failure_count: number;
+  error: string | null;
+  duration_ms: number;
+  inputs: FileInfo[];
+}
+
+export interface WeatherFacts {
+  source: string;
+  model: string | null;
+  range: [string, string];
+  hours_per_site: number;
+  missing_values: Record<string, number>;
+  sites: number;
+  distinct_series: Record<string, number>;
+  cells_to_sites: Record<string, string[]>;
+}
+
+export interface SourceComparisonVar {
+  corr_same_hour: number;
+  corr_best: number;
+  best_lag_h: number;
+  mean_open_meteo: number;
+  mean_nasa_power: number;
+}
+
+export interface Module1DataHealth {
+  generated_at: string;
+  summary: { gates: number; passed: number; failed: number };
+  gates: DataGate[];
+  ledger: { rows: number; systems: string[]; years: string[]; months_per_system: number;
+    raw_workbook_on_this_machine: boolean; governance: string };
+  weather: Record<"nasa_power" | "open_meteo", WeatherFacts>;
+  load: { quality: Quality; islands: Record<string, { peak_kw: number; mean_kw: number; load_factor: number }> };
+  scenarios: {
+    counts: Record<string, number>;
+    rule: Record<string, unknown>;
+    out_of_distribution: { scenario_id: string; island: string; plant: string; start_month: string; end_month: string }[];
+  };
+  features: { total: number; by_quality: Record<string, number>; by_group: Record<string, Record<string, number>> };
+  source_comparison: {
+    note: string;
+    islands: Record<string, Record<string, SourceComparisonVar> & {
+      annual_rain_mm: { open_meteo: [number, number]; nasa_power: [number, number] } }>;
+  };
+  generated_ms: number;
+}
+
+export function fetchModule1DataHealth(): Promise<Module1DataHealth> {
+  return getJson<Module1DataHealth>("/api/module1/data-health", m1Error);
+}
+
+export interface Module1GraphNode {
+  id: string;
+  island: string;
+  asset: string;
+  degree: number;
+  neighbours: string[];
+  self_weight: number;
+  neighbour_weight: number;
+  exposure: number;
+}
+
+export interface Module1Ablation {
+  rmse: Record<"stgnn" | "graph_free" | "time_free" | "no_weather" | "lstm_1d_residual", number>;
+  graph_gain_pct: number;
+  temporal_gain_pct: number;
+  weather_gain_pct: number;
+  params: number | null;
+}
+
+export interface Module1Graph {
+  nodes: Module1GraphNode[];
+  edges: [string, string][];
+  a_hat: number[][];
+  rule: string;
+  layer: string;
+  ablations: Record<string, Record<Module1Weighting, Module1Ablation>>;
+}
+
+export function fetchModule1Graph(): Promise<Module1Graph> {
+  return getJson<Module1Graph>("/api/module1/graph", m1Error);
+}
+
+export interface TopologyBus {
+  node_id: string; island: string; asset_type: string; nominal_kv: number; critical_load: boolean;
+  role?: string; x_offset: number; y_offset: number;
+}
+export interface TopologyLine {
+  edge_id: string; from_node: string; to_node: string; length_km: number; ampacity_a: number;
+  circuits?: number; provenance: string; note?: string;
+}
+export interface TopologyAsset {
+  element: string; bus: string; island: string; asset_type: string; rating_kva: number;
+  in_service: boolean; grid_forming: boolean; provenance: string; note?: string;
+}
+export interface Module1Topology {
+  topology_id: string;
+  schema_version: unknown;
+  base_kv: number;
+  buses: TopologyBus[];
+  lines: TopologyLine[];
+  assets: TopologyAsset[];
+  loads: { element: string; bus: string; island: string; base_kw: number; base_kvar: number }[];
+  assumptions: unknown;
+  governance?: unknown;
+}
+
+export interface SnapshotNodeState {
+  node_id: string;
+  voltage_pu: number | null;
+  p_kw: number | null;
+  q_kvar: number | null;
+  soc_fraction: number | null;
+  quality: Record<string, Quality>;
+}
+export interface Module1Snapshot {
+  topology_id: string;
+  timestamp_lst: string;
+  update_period_s: number;
+  node_states: SnapshotNodeState[];
+  assets_out_of_service: string[];
+  hybrid_plant_down: boolean;
+  data_source: string;
+}
+
+export function fetchModule1Topology(): Promise<Module1Topology> {
+  return getJson<Module1Topology>("/api/module1/topology", m1Error);
+}
+
+export function snapshotModule1(timestamp: string): Promise<Module1Snapshot> {
+  return postJson<Module1Snapshot>("/api/module1/snapshot", { timestamp }, m1Error);
+}
