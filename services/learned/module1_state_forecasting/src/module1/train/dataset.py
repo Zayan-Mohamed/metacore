@@ -85,15 +85,26 @@ def _hybrid_decay_lagged(tidy_csv: Path, stamps: np.ndarray, train_end: str) -> 
     return np.array([decay[s[:7]] for s in stamps])
 
 
-def build(data_root: str | Path | None = None) -> ForecastData:
+# Weather sources the forecaster can be trained on (ADR 0006). Both are written in the NASA POWER
+# file layout, so only the directory changes. The target's hazard term is computed from the same
+# weather, so a model trained on one source predicts that source's target.
+WEATHER_SOURCES = ("nasa_power", "open_meteo")
+
+
+def build(data_root: str | Path | None = None, weather_source: str = "nasa_power") -> ForecastData:
+    if weather_source not in WEATHER_SOURCES:
+        raise ValueError(f"weather_source {weather_source!r} not in {WEATHER_SOURCES}")
     root = _resolve_data_root(data_root)
     load_csv, params_json, nasa_dir, _ = _load_layout(root)
+    weather_dir = nasa_dir.parent / weather_source
+    if not weather_dir.is_dir():
+        raise FileNotFoundError(f"no {weather_source} weather at {weather_dir}")
     tidy_csv = (root / "processed" / "ceb_generation_tidy.csv" if (root / "processed").is_dir()
                 else root / "ceb_generation_tidy.csv")
     params = json.loads(params_json.read_text())
     graph = build_graph()
 
-    weather = {isl: _read(nasa_dir / f"{isl}_hourly.csv") for isl in ISLAND_ORDER}
+    weather = {isl: _read(weather_dir / f"{isl}_hourly.csv") for isl in ISLAND_ORDER}
     stamps = np.array([r["timestamp_lst"] for r in weather[ISLAND_ORDER[0]]])
     for isl in ISLAND_ORDER:
         if [r["timestamp_lst"] for r in weather[isl]] != list(stamps):
