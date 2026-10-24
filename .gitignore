@@ -76,6 +76,8 @@ reports/**/test_predictions_*.npz
 !services/learned/module1_state_forecasting/artifacts/stgnn_v0_1_equal.pt
 # ADR 0006: the Open-Meteo-trained model the live worker serves.
 !services/learned/module1_state_forecasting/artifacts/stgnn_v0_1_om_equal.pt
+# ...and the fair baseline it is compared with live (22 KB).
+!services/learned/module1_state_forecasting/artifacts/lstm_1d_residual_v0_1_om_equal.pt
 
 # M4's frozen calibration (bands, miss rows, input hashes), ~650 KB. The verifier reads it on
 # every call and `python -m verification.calibrate check` asserts it rebuilds byte-identically.
