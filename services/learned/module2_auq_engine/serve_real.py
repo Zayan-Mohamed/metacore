@@ -40,7 +40,11 @@ CARD_PATH = HERE / "edl_real.onnx.json"
 HEAD = "real"
 BUILD_COMMAND = "python train_real.py && python export_onnx.py --real"
 
-# One-shot scoring has no history, so the streaming debounce could never fire.
+# One-shot scoring has no history, so the streaming debounce could never fire: with
+# config.yaml's hysteresis of 2, a single call leaves the trigger one step short of latching
+# and reports "none" even at u = 1.0. Applied in score_state, NOT in load_engine -- callers
+# that score consecutive hours through the returned engine must keep the configured 2, which
+# is the whole point of the debounce.
 ONESHOT_HYSTERESIS = 1
 LATENCY_REPEATS = 20
 
@@ -91,6 +95,9 @@ def score_state(features, quality_mask=None) -> dict:
     clean = sanitize_state(features, quality_mask)
     f = clean.observed_fraction
 
+    # There is exactly one call below, so the debounce has to answer on it. reset() rebuilds
+    # the trigger, so this has to be set before it rather than after.
+    auq.hysteresis = ONESHOT_HYSTERESIS
     auq.reset()
     started = time.perf_counter()
     out = auq.score(clean.features, f)
